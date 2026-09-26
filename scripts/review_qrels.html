@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hybrid Retrieval Lab · Relevance review</title>
+  <style>
+    :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #f5f3ee; color: #17231f; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    header { background: #153c34; color: #fff; padding: 28px max(24px, calc((100vw - 1240px)/2)); }
+    header small { color: #9dd8bc; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    h1 { font-size: clamp(1.6rem, 3vw, 2.35rem); margin: 8px 0; }
+    header p { margin: 0; max-width: 760px; color: #d6e8df; }
+    main { max-width: 1240px; margin: auto; padding: 24px; }
+    .top { display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: end; }
+    .eyebrow { color: #60716a; font-size: .78rem; font-weight: 750; text-transform: uppercase; letter-spacing: .09em; }
+    h2 { margin: 5px 0 10px; font-size: 1.6rem; }
+    .need { color: #486057; margin: 0; max-width: 800px; }
+    .badge { border-radius: 100px; background: #e2eee6; color: #165438; padding: 8px 12px; font-size: .82rem; font-weight: 700; white-space: nowrap; }
+    .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 25px 0 18px; }
+    button, input, textarea { font: inherit; }
+    button { cursor: pointer; }
+    .tab, .filter { border: 1px solid #cad6cd; background: #fff; color: #21372e; padding: 9px 13px; border-radius: 9px; font-weight: 700; }
+    .tab.active, .filter.active { background: #153c34; border-color: #153c34; color: #fff; }
+    .toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 22px 0 14px; }
+    .toolbar input { min-width: 220px; flex: 1; padding: 10px 12px; border: 1px solid #cad6cd; border-radius: 9px; background: #fff; }
+    .count { color: #60716a; font-size: .86rem; margin-left: auto; }
+    .legend { color: #51645b; font-size: .85rem; margin: 0 0 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 470px), 1fr)); gap: 14px; }
+    article { border: 1px solid #d8e0d8; border-left: 5px solid #cbd6cf; background: #fff; border-radius: 12px; padding: 17px 18px; box-shadow: 0 2px 10px #1733260a; }
+    article.grade-1 { border-left-color: #d99d32; }
+    article.grade-2 { border-left-color: #15815a; }
+    .card-top { display: flex; align-items: start; justify-content: space-between; gap: 10px; }
+    .id { font-size: .78rem; color: #5c6f65; font-weight: 700; overflow-wrap: anywhere; }
+    h3 { font-size: 1.02rem; margin: 6px 0 12px; }
+    .source { font-size: .78rem; color: #5c6f65; }
+    .source a { color: #236748; }
+    .text { white-space: pre-wrap; line-height: 1.55; color: #25362e; font-size: .92rem; max-height: 260px; overflow: auto; margin: 16px 0; border-top: 1px solid #ecf0e9; padding-top: 13px; }
+    .controls { display: flex; gap: 5px; flex-wrap: wrap; }
+    .grade-button { border: 1px solid #c8d2c9; background: #f7f8f5; border-radius: 8px; padding: 8px 10px; min-width: 100px; font-size: .82rem; }
+    .grade-button[aria-pressed="true"] { border-color: #1c6a49; background: #dcefe2; color: #154d36; font-weight: 800; }
+    .reason-label { display: block; font-size: .8rem; font-weight: 700; color: #50655a; margin: 15px 0 5px; }
+    textarea { display: block; width: 100%; resize: vertical; min-height: 68px; border: 1px solid #c8d2c9; border-radius: 8px; padding: 10px; color: #24362d; background: #fff; }
+    .card-footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; }
+    .save { background: #153c34; color: white; border: 0; border-radius: 7px; padding: 7px 11px; font-size: .8rem; }
+    .state { color: #65776c; font-size: .76rem; }
+    .error { color: #ad392c; }
+    @media (max-width: 600px) { .top { grid-template-columns: 1fr; } .count { margin-left: 0; width: 100%; } .grade-button { min-width: 0; flex: 1; } }
+  </style>
+</head>
+<body>
+  <header><small>Hybrid Retrieval Lab / pilot review</small><h1>Relevance review</h1><p>Compare each query with the corpus chunks. Edit grades and reasons; each change is saved to the judgments file.</p></header>
+  <main>
+    <nav class="tabs" id="tabs" aria-label="Queries"></nav>
+    <section class="top"><div><div class="eyebrow" id="query-id"></div><h2 id="query"></h2><p class="need" id="need"></p></div><span class="badge" id="summary"></span></section>
+    <div class="toolbar"><input id="search" type="search" placeholder="Search text, title or ID…" aria-label="Search chunks"><button class="filter active" data-filter="all">All</button><button class="filter" data-filter="positive">Relevant</button><button class="filter" data-filter="zero">Grade 0</button><span class="count" id="count"></span></div>
+    <p class="legend"><strong>2</strong> directly answers · <strong>1</strong> helps, but is incomplete · <strong>0</strong> does not answer the specific need. Changes update the local judgments immediately.</p>
+    <div class="grid" id="cards"></div>
+  </main>
+  <script>
+    let data, queryId, filter = 'all';
+    const $ = id => document.getElementById(id);
+    const judgments = () => new Map(data.judgments.filter(j => j.query_id === queryId).map(j => [j.chunk_id, j]));
+    const labels = ['0 · Does not answer', '1 · Helps', '2 · Answers'];
+
+    async function save(row, grade, reason, state) {
+      state.textContent = 'Saving…'; state.classList.remove('error');
+      try {
+        const response = await fetch('/api/judgment', {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({query_id:row.query_id, chunk_id:row.chunk_id, grade, reason})});
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error || 'Failed to save');
+        Object.assign(row, body.judgment);
+        if (!('reason' in body.judgment)) delete row.reason;
+        render();
+      } catch (error) { state.textContent = error.message; state.classList.add('error'); }
+    }
+
+    function render() {
+      const query = data.queries.find(q => q.id === queryId), byId = judgments();
+      $('tabs').replaceChildren(...data.queries.map(q => {
+        const b = document.createElement('button'); b.className = 'tab' + (q.id === queryId ? ' active' : '');
+        b.textContent = q.id + ' · ' + q.query; b.onclick = () => { queryId = q.id; history.replaceState(null, '', '?query=' + encodeURIComponent(queryId)); $('search').value = ''; render(); }; return b;
+      }));
+      $('query-id').textContent = 'Query ' + query.id;
+      $('query').textContent = query.query;
+      $('need').textContent = query.information_need;
+      const all = data.chunks.map(c => ({chunk:c, row:byId.get(c.id)}));
+      $('summary').textContent = `${all.filter(x => x.row.grade === 2).length} grade 2 · ${all.filter(x => x.row.grade === 1).length} grade 1 · ${all.filter(x => x.row.grade === 0).length} grade 0`;
+      const term = $('search').value.toLocaleLowerCase('pt-BR');
+      const shown = all.filter(({chunk,row}) => (filter === 'all' || (filter === 'positive' ? row.grade > 0 : row.grade === 0)) && [chunk.id,chunk.title,chunk.section,chunk.text].some(v => v.toLocaleLowerCase('pt-BR').includes(term))).sort((a,b) => b.row.grade - a.row.grade || a.chunk.id.localeCompare(b.chunk.id));
+      $('count').textContent = `${shown.length} of ${all.length} chunks`;
+      document.querySelectorAll('.filter').forEach(b => b.classList.toggle('active', b.dataset.filter === filter));
+      $('cards').replaceChildren(...shown.map(({chunk,row}) => card(chunk,row)));
+    }
+
+    function card(chunk,row) {
+      const article = document.createElement('article'); article.className = 'grade-' + row.grade;
+      const top = document.createElement('div'); top.className = 'card-top';
+      const heading = document.createElement('div');
+      const id = document.createElement('div'); id.className = 'id'; id.textContent = chunk.id;
+      const title = document.createElement('h3'); title.textContent = chunk.section;
+      const source = document.createElement('div'); source.className = 'source'; source.append(document.createTextNode(chunk.title + ' · '));
+      const link = document.createElement('a'); link.href = chunk.source_url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = 'Open source ↗'; source.append(link);
+      heading.append(id,title,source); top.append(heading);
+      const body = document.createElement('div'); body.className = 'text'; body.textContent = chunk.text;
+      const controls = document.createElement('div'); controls.className = 'controls';
+      const label = document.createElement('label'); label.className = 'reason-label'; label.textContent = 'Reason (optional)';
+      const reason = document.createElement('textarea'); reason.value = row.reason || ''; reason.maxLength = 2000; reason.setAttribute('aria-label','Reason for ' + chunk.id);
+      const footer = document.createElement('div'); footer.className = 'card-footer';
+      const state = document.createElement('span'); state.className = 'state'; state.textContent = 'Saved judgment';
+      const saveButton = document.createElement('button'); saveButton.className = 'save'; saveButton.textContent = 'Save reason'; saveButton.onclick = () => save(row,row.grade,reason.value,state);
+      footer.append(state,saveButton);
+      [0,1,2].forEach(grade => { const b = document.createElement('button'); b.className = 'grade-button'; b.textContent = labels[grade]; b.setAttribute('aria-pressed',String(row.grade === grade)); b.onclick = () => save(row,grade,reason.value,state); controls.append(b); });
+      article.append(top,body,controls,label,reason,footer); return article;
+    }
+
+    document.querySelectorAll('.filter').forEach(b => b.onclick = () => { filter = b.dataset.filter; render(); });
+    $('search').addEventListener('input',render);
+    fetch('/api/data').then(r => r.json()).then(result => { if (result.error) throw new Error(result.error); data = result; const requested = new URLSearchParams(location.search).get('query'); queryId = data.queries.some(q => q.id === requested) ? requested : data.queries[0].id; render(); }).catch(error => { $('cards').textContent = 'Could not load data: ' + error.message; });
+  </script>
+</body>
+</html>
