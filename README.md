@@ -1,4 +1,4 @@
-# Hybrid Retrieval Lab
+# Retrieval Lab
 
 A Python retrieval API and an inspectable experiment comparing **BM25, dense retrieval, RRF fusion, and ColBERT reranking** over a frozen Portuguese GitHub documentation corpus. It returns ranked chunks without generating answers.
 

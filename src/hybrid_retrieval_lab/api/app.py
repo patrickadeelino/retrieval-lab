@@ -24,7 +24,7 @@ from hybrid_retrieval_lab.services.search.service import (
 
 configure_logging()
 logger = logging.getLogger(__name__)
-app = FastAPI(title="Hybrid Retrieval Lab", version="0.1.0")
+app = FastAPI(title="Retrieval Lab", version="0.1.0")
 
 
 @app.middleware("http")
