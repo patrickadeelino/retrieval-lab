@@ -1,0 +1,52 @@
+{
+  "fetched_at_utc": "2026-09-25T16:52:31.690494+00:00",
+  "source": "GitHub Docs (Portuguese)",
+  "language": "pt-BR",
+  "source_license": "CC-BY-4.0; verify attribution before redistribution",
+  "sources": [
+    {
+      "id": "webhook-best-practices",
+      "url": "https://docs.github.com/pt/webhooks/using-webhooks/best-practices-for-using-webhooks",
+      "title": "Melhores práticas para usar webhooks",
+      "html_sha256": "1537909e2efd4f07db6dddbf9479696d21ff330d33a8ae0328d7f7760bd0c405",
+      "section_count": 8
+    },
+    {
+      "id": "webhook-validation",
+      "url": "https://docs.github.com/pt/webhooks/using-webhooks/validating-webhook-deliveries",
+      "title": "Validação de entregas de webhooks",
+      "html_sha256": "64f2a426d7bd5af56f40b3d7e4823146d3d153b2c29bfe37096c2c8ff831d976",
+      "section_count": 6
+    },
+    {
+      "id": "webhook-failures",
+      "url": "https://docs.github.com/pt/webhooks/using-webhooks/handling-failed-webhook-deliveries",
+      "title": "Como lidar com falhas de entrega de webhook",
+      "html_sha256": "d63754f31b09bccf8224a505418d33a9c367957fdee0baf1ef9de81aee65816f",
+      "section_count": 2
+    },
+    {
+      "id": "rest-pagination",
+      "url": "https://docs.github.com/pt/rest/using-the-rest-api/using-pagination-in-the-rest-api",
+      "title": "Como usar paginação na API REST",
+      "html_sha256": "50f7eb7f650f4e5f1441afaacb3ed53d63240130b02f41a0e8b20a8f01324a88",
+      "section_count": 4
+    },
+    {
+      "id": "rest-rate-limits",
+      "url": "https://docs.github.com/pt/rest/using-the-rest-api/rate-limits-for-the-rest-api",
+      "title": "Limites de taxa para a API REST",
+      "html_sha256": "bfec31daaae04ee2f4e936209b901d2cea17ea69d4e4c243c7f7d6aeb6b8e4b9",
+      "section_count": 13
+    },
+    {
+      "id": "rest-troubleshooting",
+      "url": "https://docs.github.com/pt/rest/using-the-rest-api/troubleshooting-the-rest-api",
+      "title": "Solucionar problemas do API REST",
+      "html_sha256": "f5e8469e145f1c6921d69d42cb77d21b2694c5b11c9d2a9e098955e126d39197",
+      "section_count": 13
+    }
+  ],
+  "extraction": "scripts/build_corpus.py",
+  "max_chunk_chars_target": 1600
+}

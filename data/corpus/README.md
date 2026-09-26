@@ -1,0 +1,9 @@
+# Corpus piloto: GitHub Docs em português
+
+Este snapshot contém seis páginas da versão oficial em português do GitHub Docs e 53 chunks extraídos. `pages.jsonl` guarda o texto congelado; `chunks.jsonl` é a unidade de recuperação; `manifest.json` registra URLs, momento da coleta e hashes SHA-256 do HTML recebido. Execute `python scripts/build_corpus.py` para reconstruir os chunks a partir das páginas congeladas. A opção `--refresh` substitui o snapshot pela versão atual do site e pode mudar IDs e resultados; revise o diff antes de aceitar uma atualização.
+
+A extração mantém o texto do artigo sob seus títulos de seção, remove navegação, exemplos longos de código e listas de leitura adicional, e agrupa parágrafos ou itens de lista em chunks de até aproximadamente 1.600 caracteres. O ID de cada chunk é estável dentro deste snapshot. Inspecione os chunks antes de julgar relevância: este é um corpus piloto, ainda sem qrels.
+
+Fonte: [GitHub Docs em português](https://docs.github.com/pt), © GitHub, sob [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). O texto foi selecionado, extraído das páginas e dividido em chunks. O repositório `github/docs` [identifica a documentação como conteúdo Creative Commons](https://docs.github.com/pt/get-started/exploring-projects-on-github/contributing-to-open-source); seus [metadados](https://github.com/github/docs/blob/main/package.json) listam CC-BY-4.0 junto da licença do código. O código deste projeto e os textos de origem têm proveniências distintas.
+
+O próprio GitHub informa que [parte do conteúdo em português pode ter tradução automática](https://docs.github.com/pt/webhooks/using-webhooks/best-practices-for-using-webhooks). Antes de firmar um julgamento de relevância em trecho ambíguo, compare com a página original em inglês. As consultas selecionadas para o piloto estão em `../queries/pilot-queries.jsonl`.
