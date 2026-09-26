@@ -10,6 +10,9 @@ permissions:
 jobs:
   unit-and-static-checks:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -32,5 +35,33 @@ jobs:
       - name: Check types
         run: mypy
 
-      - name: Run unit tests
-        run: pytest -q -m unit tests/unit
+      - name: Run unit tests with coverage
+        run: >-
+          pytest -q -m unit tests/unit --cov
+          --cov-report=term-missing
+          --cov-report=xml:coverage.xml
+          --cov-report=json:coverage.json
+          --cov-report=html:htmlcov
+          --cov-report=markdown-append:"$GITHUB_STEP_SUMMARY"
+
+      - name: Save unit coverage reports
+        if: ${{ !cancelled() && hashFiles('coverage.xml') != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: unit-test-coverage
+          path: |
+            coverage.xml
+            coverage.json
+            htmlcov/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload unit coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          use_oidc: true
+          files: coverage.xml
+          flags: unit
+          name: unit-tests
+          disable_search: true
+          fail_ci_if_error: true

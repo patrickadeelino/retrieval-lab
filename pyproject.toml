@@ -19,6 +19,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "pytest>=8,<10",
+  "pytest-cov>=7,<8",
   "httpx2>=2,<3",
   "ruff>=0.13,<1",
   "mypy>=1.18,<2",
@@ -43,3 +44,12 @@ select = ["E", "F", "I", "B", "UP"]
 python_version = "3.11"
 files = ["src/hybrid_retrieval_lab", "scripts"]
 strict = true
+
+[tool.coverage.run]
+branch = true
+source = ["src/hybrid_retrieval_lab", "scripts"]
+relative_files = true
+
+[tool.coverage.report]
+precision = 2
+show_missing = true

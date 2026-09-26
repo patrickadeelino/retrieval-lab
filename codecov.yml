@@ -1,0 +1,10 @@
+# Report measured unit coverage without introducing a coverage gate yet.
+coverage:
+  precision: 2
+  status:
+    project: false
+    patch: false
+comment: false
+flags:
+  unit:
+    carryforward: false
