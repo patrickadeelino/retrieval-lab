@@ -1,0 +1,9 @@
+.git
+.venv
+__pycache__
+*.pyc
+data/corpus/pages.jsonl
+data/queries/initial-queries.jsonl
+data/qrels
+docs
+scripts
