@@ -6,36 +6,14 @@ import argparse
 import hashlib
 import json
 import subprocess
-import textwrap
 from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TypedDict
 
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 
-
-class Section(TypedDict):
-    heading: str
-    blocks: list[str]
-
-
-class Page(TypedDict):
-    id: str
-    title: str
-    url: str
-    sections: list[Section]
-
-
-class Chunk(TypedDict):
-    id: str
-    source_id: str
-    source_url: str
-    title: str
-    section: str
-    text: str
-
+from hybrid_retrieval_lab.ingestion.chunker import MAX_CHARS, Page, Section, chunk_pages
 
 SOURCES = {
     "webhook-best-practices": "https://docs.github.com/pt/webhooks/using-webhooks/best-practices-for-using-webhooks",
@@ -45,7 +23,6 @@ SOURCES = {
     "rest-rate-limits": "https://docs.github.com/pt/rest/using-the-rest-api/rate-limits-for-the-rest-api",
     "rest-troubleshooting": "https://docs.github.com/pt/rest/using-the-rest-api/troubleshooting-the-rest-api",
 }
-MAX_CHARS = 1600
 
 
 def sha256(value: bytes) -> str:
@@ -103,48 +80,6 @@ def extract(html: bytes, source_id: str, url: str) -> Page:
     if section["blocks"]:
         sections.append(section)
     return {"id": source_id, "title": title, "url": url, "sections": sections}
-
-
-def make_chunks(pages: list[Page]) -> list[Chunk]:
-    chunks: list[Chunk] = []
-    for page in pages:
-        ordinal = 0
-        for section in page["sections"]:
-            group: list[str] = []
-            size = 0
-            for block in (
-                part
-                for original in section["blocks"]
-                for part in textwrap.wrap(original, width=MAX_CHARS, break_long_words=False, break_on_hyphens=False)
-            ):
-                if group and size + len(block) + 2 > MAX_CHARS:
-                    ordinal += 1
-                    chunks.append(
-                        {
-                            "id": f"{page['id']}-{ordinal:03d}",
-                            "source_id": page["id"],
-                            "source_url": page["url"],
-                            "title": page["title"],
-                            "section": section["heading"],
-                            "text": "\n\n".join(group),
-                        }
-                    )
-                    group, size = [], 0
-                group.append(block)
-                size += len(block) + 2
-            if group:
-                ordinal += 1
-                chunks.append(
-                    {
-                        "id": f"{page['id']}-{ordinal:03d}",
-                        "source_id": page["id"],
-                        "source_url": page["url"],
-                        "title": page["title"],
-                        "section": section["heading"],
-                        "text": "\n\n".join(group),
-                    }
-                )
-    return chunks
 
 
 def write_jsonl(path: Path, rows: Iterable[Mapping[str, object]]) -> None:
@@ -215,7 +150,8 @@ def main() -> None:
                     "language": "pt-BR",
                     "source_license": "CC-BY-4.0; verify attribution before redistribution",
                     "sources": sources,
-                    "extraction": "scripts/build_corpus.py",
+                    "extraction": "scripts/build_corpus.py:extract",
+                    "chunking": "src/hybrid_retrieval_lab/ingestion/chunker.py:chunk_pages",
                     "max_chunk_chars_target": MAX_CHARS,
                 },
                 ensure_ascii=False,
@@ -226,7 +162,7 @@ def main() -> None:
         )
     else:
         pages = read_pages(pages_path)
-    chunks = make_chunks(pages)
+    chunks = chunk_pages(pages)
     write_jsonl(corpus_dir / "chunks.jsonl", chunks)
     print(f"{len(pages)} pages, {len(chunks)} chunks")
     for page in pages:

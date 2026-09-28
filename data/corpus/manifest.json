@@ -47,6 +47,7 @@
       "section_count": 13
     }
   ],
-  "extraction": "scripts/build_corpus.py",
+  "extraction": "scripts/build_corpus.py:extract",
+  "chunking": "src/hybrid_retrieval_lab/ingestion/chunker.py:chunk_pages",
   "max_chunk_chars_target": 1600
 }
