@@ -1,6 +1,8 @@
 # Reviewed relevance judgments
 
-`pilot-proposed.jsonl` retains its historical filename but contains the author's reviewed judgments for the ten current queries, `q01`–`q10`: 530 query/chunk pairs, with 53 chunks per query. Each pair has an explicit grade of `0`, `1`, or `2`; a missing row would be a missing judgment, not a zero. Positive rows include a `reason`. The corpus is in [`../corpus/chunks.jsonl`](../corpus/chunks.jsonl), and the information needs are in [`../queries/pilot-queries.jsonl`](../queries/pilot-queries.jsonl).
+`pilot-proposed.jsonl` contains 530 judgments for the historical 53-chunk snapshot and is retained only for comparison. Missing rows are missing judgments, not grade zero. The current corpus is in [`../corpus/chunks.jsonl`](../corpus/chunks.jsonl), and the information needs are in [`../queries/pilot-queries.jsonl`](../queries/pilot-queries.jsonl).
+
+`pilot-token-only.jsonl` is the current baseline qrels set for the 50-chunk token-only snapshot. It applies the grade moves identified in the chunk comparison, removes rows for deleted chunks, and updates affected q08 rationales. Other grades are carried forward from the previous judgments and have not all been independently re-reviewed. The baseline report is therefore diagnostic and retains this provenance limitation.
 
 ## Rubric
 

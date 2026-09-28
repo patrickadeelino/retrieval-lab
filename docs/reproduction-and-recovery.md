@@ -1,6 +1,6 @@
 # Reproduction and index recovery
 
-This guide defines the repeatable local run and the safe response to an interrupted index replacement. The final public evaluation is generated only after review and is stored at `reports/baseline/`.
+This guide defines the repeatable local run and the safe response to an interrupted index replacement. The current token-only baseline is stored at `reports/baseline/`; its judgments include grades carried forward from the previous corpus snapshot, as documented in the [evaluation guide](evaluation.md#judgment-provenance).
 
 ## Reproduce from the release commit
 
@@ -38,7 +38,7 @@ done
 docker compose -p retrieval-lab-baseline run --rm \
   -e LOG_FILE=/tmp/evaluation-run.log api \
   python -m hybrid_retrieval_lab.cli evaluate \
-  --reviewed-qrels --output reports/baseline
+  --qrels data/qrels/pilot-token-only.jsonl --output reports/baseline
 ```
 
 The evaluator verifies the corpus, judgments, stored vectors and index manifest before timing. It writes one HTML report and its source JSON. The runtime section records Python/platform, CPU count, Qdrant and uv versions, the `uv.lock` SHA-256, Git revision/tree state and encoder snapshots. The HTML can be viewed without loading the models:
