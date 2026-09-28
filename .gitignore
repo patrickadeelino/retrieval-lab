@@ -11,6 +11,12 @@ build/
 dist/
 .coverage
 .coverage.*
+/reports/*
+!/reports/README.md
+!/reports/baseline/
+/reports/baseline/*
+!/reports/baseline/index.html
+!/reports/baseline/pilot.json
 coverage.xml
 coverage.json
 coverage.md

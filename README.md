@@ -20,35 +20,57 @@ The reviewed pilot contains **53 chunks, 10 queries, and 530 relevance judgments
 | Hybrid RRF | 0.797 | 94.3% | 13.95 ms |
 | Hybrid + ColBERT | 0.868 | 94.3% | 154.46 ms |
 
-ColBERT improved average ordering at the top with about **11.1×** the typical latency of hybrid retrieval. It reranks the same ten candidates, so Recall@10 is unchanged by construction. These are descriptive results for this small pilot, not a general benchmark or production SLA.
+ColBERT improved average ordering at the top with about **11.1×** the typical latency of hybrid retrieval. It reranks the same ten candidates, so Recall@10 is unchanged by construction. These are descriptive results from the last validated pilot, not a general benchmark or production SLA. The report files were removed while preparing one final, clean-clone baseline; the new report will be reviewed before it is added here.
 
-Typical latency is the median of per-query medians, with three timed runs after warmup. It includes query encoding and Qdrant, but excludes HTTP. [Method and limitations](docs/evaluation.md) · [Saved results](reports/ten-query-validated/pilot.json) · [Fresh-install report](reports/clean-install-validation/index.html).
+Typical latency is the median of per-query medians, with three timed runs after warmup. It includes query encoding and Qdrant, but excludes HTTP. [Method and limitations](docs/evaluation.md) · [Reproduction and recovery procedure](docs/reproduction-and-recovery.md) · [Report publication status](reports/README.md).
 
 ## Retrieval flow
 
 ```mermaid
-flowchart LR
+%%{init: {"flowchart": {"nodeSpacing": 108, "rankSpacing": 60}}}%%
+flowchart TD
     HTTP[POST /search] --> Service[SearchService]
     Offline[Offline evaluator] --> Service
-    Service --> Factory[Strategy factory]
-    Factory --> BM25[BM25: top 10]
-    Factory --> E5[E5: top 10]
-    BM25 --> RRF[RRF k=60: top 10]
-    E5 --> RRF
-    RRF --> ColBERT[ColBERT: same 10 IDs]
+    Service --> Factory{Strategy factory}
+
+    Factory -->|bm25| BM25["<div style='width:280px'>BM25: top 10</div>"]
+    Factory -->|dense| E5["<div style='width:280px'>E5 embeddings: top 10</div>"]
+    Factory -->|hybrid| Hybrid[Hybrid strategy]
+    Factory -->|hybrid_colbert| Reranking[Hybrid + ColBERT strategy]
+
+    Hybrid --> HBM25[BM25: top 10]
+    Hybrid --> HE5[E5 embeddings: top 10]
+    HBM25 --> HRRF[RRF k=60: top 10]
+    HE5 --> HRRF
+
+    Reranking --> CBM25[BM25: top 10]
+    Reranking --> CE5[E5 embeddings: top 10]
+    CBM25 --> CRRF[RRF k=60: top 10]
+    CE5 --> CRRF
+    CRRF --> ColBERT[ColBERT: rerank the same 10 candidates]
+
+    %% Equal total branch lengths keep all four strategy entries on the same rank.
+    BM25 ------> End[Return results]
+    E5 ------> End
+    HRRF ----> End
+    ColBERT ---> End
 ```
 
-The selected strategy determines where the pipeline stops. The service then applies the response limit. Models load lazily; documents are encoded during ingestion. [Architecture and API contract](docs/architecture.md).
+The factory selects one of four strategies. BM25 and dense return their own rankings; hybrid fuses both top-10 lists and keeps at most 10 candidates; hybrid_colbert reranks only those fused candidates. The service then applies the requested response limit (default 5, maximum 10). Models load lazily; documents are encoded during ingestion. [Architecture and API contract](docs/architecture.md).
 
 ## Run locally
 
 Requires Docker with Compose, internet access for initial downloads, and disk space for Qdrant and the model cache. ColBERT downloads approximately 2.2 GB; its cache workaround may duplicate roughly that amount. Python 3.11+ is needed for local development and optional report/review servers.
 
-From the repository root:
+From the repository root, install the exact dependency set in `uv.lock`:
 
 ```bash
-docker compose up -d --build
-docker compose run --rm api python -m hybrid_retrieval_lab.cli index
+uv sync --locked --extra dev
+docker compose build
+docker compose up -d qdrant
+docker compose stop api
+docker compose run --rm -e LOG_FILE=/tmp/index-run.log api python -m hybrid_retrieval_lab.cli index
+docker compose up -d api
 curl -sS http://127.0.0.1:8000/search \
   -H 'Content-Type: application/json' \
   -d '{"query":"Para que serve X-GitHub-Delivery?","strategy":"hybrid_colbert","limit":5,"inspect":true}'
@@ -56,29 +78,21 @@ curl -sS http://127.0.0.1:8000/search \
 
 The Portuguese example matches the corpus language. Open [API documentation](http://127.0.0.1:8000/docs). Strategies: `bm25`, `dense`, `hybrid`, `hybrid_colbert`. The response `limit` defaults to 5 and accepts 1–10. Inspection exposes intermediate rankings and fusion contributions.
 
-**Indexing builds and validates a versioned collection before atomically switching the `github_docs_pilot_active` alias.** The previous generation remains available until the switch succeeds. Oversized chunks are skipped individually; oversized E5 queries return HTTP 422. See [index identity and token policy](docs/index-validation-and-token-budget.md). Restart the API after changing index configuration to clear cached resources: `docker compose restart api`.
+**Indexing builds and validates a versioned collection before atomically switching the `github_docs_pilot_active` alias.** A timeout during that switch is reconciled against Qdrant before cleanup; an unknown state retains both generations for inspection. Stop the API before reindexing, then restart it to clear cached resources. Oversized chunks are skipped individually; oversized E5 queries return HTTP 422. See [index identity and token policy](docs/index-validation-and-token-budget.md) and the [recovery steps](docs/reproduction-and-recovery.md#recover-after-an-indexing-error).
 
 Stop with `docker compose down`; named volumes retain the index and models. JSON logs are written to `logs/hybrid-retrieval-lab.log`, correlated by request ID. [Logging configuration](docs/observability.md).
 
-## Explore or reproduce the report
+## Reproduce the report
 
-View the saved report without running models:
+The single public report is planned at `reports/baseline/`. It is intentionally empty until the reviewed clean-clone run is approved. No model evaluation was run while preparing the procedure.
 
-```bash
-python -m http.server 8770 --bind 127.0.0.1 --directory reports/ten-query-validated
-```
-
-Open [the report](http://127.0.0.1:8770/). Its original Portuguese interface is preserved; newly generated reports use English labels and retain Portuguese source data. GitHub's file viewer does not render report HTML as a website.
-
-For a new evaluation against the indexed corpus, use a separate directory:
+After report generation, view it locally with:
 
 ```bash
-docker compose run --rm api python -m hybrid_retrieval_lab.cli evaluate \
-  --reviewed-qrels --output reports/local-run
-python -m http.server 8772 --bind 127.0.0.1 --directory reports/local-run
+python -m http.server 8770 --bind 127.0.0.1 --directory reports/baseline
 ```
 
-Avoid concurrent model workloads while timing. The evaluator validates the index identity before searching. The clean installation reproduced all 40 saved rankings and all relevance metrics; see the [validation notes](docs/clean-install-validation.md). [Evaluation guide](docs/evaluation.md).
+Follow the [clean-clone reproduction procedure](docs/reproduction-and-recovery.md). It records the Git revision, worktree state, lockfile hash, model snapshots and input hashes. Avoid concurrent model workloads while timing. The evaluator validates the index identity before searching. [Evaluation method and limitations](docs/evaluation.md).
 
 ## Review relevance judgments
 
@@ -92,7 +106,7 @@ Open [the review screen](http://127.0.0.1:8765) to inspect every chunk and edit 
 
 Unit tests use explicit doubles without Qdrant or downloads. Integration tests use real Qdrant and encoders in isolated collections. Ruff checks lint/format; mypy runs strictly over source and scripts. GitHub Actions is configured for **unit tests and static checks only**. The CI badge tracks the main-branch workflow. The Codecov badge reports unit-test coverage only, including branches; integration coverage is measured separately. Coverage spans the Python package and scripts. See [coverage setup and reports](docs/development.md#coverage).
 
-See [development commands](docs/development.md), [phase checklist](docs/phase-7-plan.md), and [documentation map](docs/README.md). The local clean-install walkthrough is recorded in [the validation report](docs/clean-install-validation.md). The project is published as [patrickadeelino/retrieval-lab](https://github.com/patrickadeelino/retrieval-lab).
+See the [development guide](docs/development.md) and [documentation index](docs/README.md). The project is published as [patrickadeelino/retrieval-lab](https://github.com/patrickadeelino/retrieval-lab).
 
 ## License
 
