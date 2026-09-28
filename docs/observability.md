@@ -27,9 +27,9 @@ Unexpected exceptions return HTTP 500 with a generic English message and the sam
 | `search.dependency_failed` / `http.request.failed` | ERROR | Exception type and traceback for dependency or unexpected failures. |
 | `search.query_rejected` | ERROR | Model, token count and limit for a query that exceeds the E5 window; HTTP returns 422. |
 | `index.chunk_skipped` | ERROR | Chunk ID, model, token count and limit; ingestion continues with other chunks. |
-| `index.*` / `cli.command.*` | INFO or ERROR | Corpus validation, vector preparation, generation creation/verification, alias switch, completion, and CLI failure. |
+| `index.*` / `cli.command.*` | INFO or ERROR | Corpus validation, vector preparation, fixed collection creation, completion, and CLI failure. |
 
-`index.completed` also records `skipped_count`, `skipped_ids`, and the stored-index checksum. The collection manifest preserves these exclusions so evaluation does not silently remove them from the relevance denominator.
+`index.completed` records the indexed point count. Skipped chunk IDs and counts are preserved in the collection manifest so evaluation does not silently remove them from the relevance denominator.
 
 The search total includes lazy model initialization; a first-stage duration does not, because the encoder is loaded before that function starts. Compare warm requests when judging retrieval latency. The file logger is process-local and uses standard `RotatingFileHandler`; Compose currently runs one API worker.
 

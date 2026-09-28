@@ -51,7 +51,7 @@ flowchart LR
 - **Strategy protocol and factory.** Each strategy implements the same protocol and the factory selects it from the request value.
 - **Three representations in each indexed Qdrant collection.** Chunks have a sparse BM25 vector, a 384-dimensional E5 vector and a ColBERT multivector with 128 dimensions per token.
 - **ColBERT reuses the hybrid candidates.** Qdrant applies MaxSim to the fused candidate IDs; reranking is checked against the original candidate set.
-- **Verified index publication.** Indexing builds and verifies a versioned collection against a manifest before atomically switching the active alias.
+- **Reproducible fixed index.** Indexing rebuilds `github_docs_pilot` and stores a compact manifest with corpus identity, model revisions, chunking settings and skipped chunks. Evaluation checks the manifest, point count and deterministic IDs.
 
 See the [architecture and HTTP contract](docs/architecture.md).
 
@@ -76,7 +76,7 @@ curl -sS http://127.0.0.1:8000/search \
 
 The query is in Portuguese to match the corpus. Set `inspect` to `true` to see the intermediate BM25 and dense rankings and each chunk's RRF contribution. Open the interactive [API docs](http://127.0.0.1:8000/docs).
 
-Before reindexing, stop the API with `docker compose stop api`; see [reproduction and recovery](docs/reproduction-and-recovery.md). To develop locally, run `uv sync --locked --extra dev`, then follow the [development guide](docs/development.md) for lint, strict typing and unit/integration tests.
+Before reindexing, stop the API with `docker compose stop api`; see [reproduction](docs/reproduction.md). The fixed collection is deleted before it is recreated, so a Qdrant write failure requires another indexing run. To develop locally, run `uv sync --locked --extra dev`, then follow the [development guide](docs/development.md) for lint, strict typing and unit/integration tests.
 
 ### Reproduce the report
 
@@ -86,7 +86,7 @@ The saved baseline can be viewed without running the models:
 python -m http.server 8770 --bind 127.0.0.1 --directory reports/baseline
 ```
 
-For a clean-clone reproduction, follow the [reproduction procedure](docs/reproduction-and-recovery.md). It records the Git revision, worktree state, lockfile hash, model snapshots and input hashes. Avoid running other model workloads during timing.
+For a clean-clone reproduction, follow the [reproduction procedure](docs/reproduction.md). It records the Git revision, worktree state, lockfile hash, model snapshots and input hashes. Avoid running other model workloads during timing.
 
 ## Method and limitations
 
@@ -94,7 +94,7 @@ For a clean-clone reproduction, follow the [reproduction procedure](docs/reprodu
 
 - **Frozen, hashed corpus.** The current baseline uses 50 chunks produced by the token-only chunker. The manifest records source hashes and tokenizer revision.
 - **Complete local judgments.** The 500 grades cover ten queries across all 50 current chunks. Some grades were carried forward from the previous 53-chunk snapshot and remain a limitation of this baseline.
-- **Verified index identity.** Evaluation stops if the corpus, encoder snapshots or stored vectors differ from the manifest.
+- **Verified index identity.** Evaluation stops if the corpus, encoder configuration, recorded revisions, point count or deterministic IDs differ from the manifest.
 - **Reproduction procedure.** The documented flow rebuilds and validates the index before evaluation. A clean-clone reproduction of this new token-only baseline has not yet been verified.
 
 ### What it cannot establish

@@ -7,5 +7,5 @@ These guides describe the public contract, implementation, evaluation method, an
 - [Evaluation method and metrics](evaluation.md)
 - [Index identity and token limits](index-validation-and-token-budget.md)
 - [Observability](observability.md)
-- [Reproduction and recovery](reproduction-and-recovery.md)
+- [Reproduction](reproduction.md)
 - [Third-party notices](third-party-notices.md)

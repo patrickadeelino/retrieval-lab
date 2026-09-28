@@ -37,8 +37,8 @@ The repository preserves the current qrels snapshot and records changes made aft
 
 ## Reproduction and provenance
 
-Use the [reproduction and recovery procedure](reproduction-and-recovery.md) to rebuild and evaluate the release index in an isolated Compose project. `--reviewed-qrels` records author review; it does not perform one.
+Use the [reproduction procedure](reproduction.md) to rebuild and evaluate the local index. `--reviewed-qrels` records author review; it does not perform one.
 
-The evaluator verifies corpus, IDs, payloads, vectors, settings and snapshots, then runs the shared service with warmup and three timed repetitions per query/strategy. JSON preserves input hashes, settings, rankings, grades, latency samples and environment. This report was generated inside the API container, which did not have Git metadata; its source revision is therefore recorded as unknown. A clean-clone reproduction of this token-only baseline remains to be verified. Skipped chunks remain in the relevance denominator. See [index/token policy](index-validation-and-token-budget.md).
+The evaluator verifies corpus, IDs, point count, settings and recorded snapshots, then runs the shared service with warmup and three timed repetitions per query/strategy. JSON preserves input hashes, settings, rankings, grades, latency samples and environment. This report was generated inside the API container, which did not have Git metadata; its source revision is therefore recorded as unknown. A clean-clone reproduction of this token-only baseline remains to be verified. Skipped chunks remain in the relevance denominator. See [index/token policy](index-validation-and-token-budget.md).
 
 The HTML shows aggregate quality/time, candidate coverage, paired changes and individual rankings. Saved HTML remains Portuguese; the current renderer uses English interface text with unchanged Portuguese data. Rendering saved JSON does not require another model evaluation.
