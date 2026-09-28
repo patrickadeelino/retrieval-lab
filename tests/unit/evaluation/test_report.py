@@ -19,4 +19,6 @@ def test_html_preserves_metrics_and_escapes_source_text(evaluation_case) -> None
     assert "2 timed runs" in document.get_text()
     assert "Recall@10" in document.get_text() and "nDCG@5" in document.get_text()
     assert report["inputs"]["qrels_sha256"] in document.get_text()
+    assert report["config"]["runtime"]["uv_lock_sha256"] in document.get_text()
+    assert report["config"]["runtime"]["git_commit"][:12] in document.get_text()
     assert document.find_all("table")

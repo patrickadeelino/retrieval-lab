@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from html import escape
 from statistics import median
 
-from hybrid_retrieval_lab.evaluation.models import PilotReport, QueryReport
+from hybrid_retrieval_lab.evaluation.models import EvaluatedStrategy, PilotReport, QueryReport
 
 LABELS = {"bm25": "BM25", "dense": "Dense · E5", "hybrid": "Hybrid · RRF", "hybrid_colbert": "Hybrid + ColBERT"}
 
@@ -54,7 +55,192 @@ def _coverage_before(query: QueryReport) -> float:
     return coverage
 
 
+def _render_strategy(label: str, result: EvaluatedStrategy) -> tuple[str, str]:
+    metrics = result["metrics"]
+    latency = result["latency_ms"]
+    summary_row = (
+        f'<tr><th scope="row">{_e(label)}</th><td>{_pct(metrics["recall_at_5"])}</td>'
+        f"<td>{_pct(metrics['recall_at_10'])}</td><td>{_metric(metrics['ndcg_at_5'])}</td>"
+        f"<td>{_metric(metrics['ndcg_at_10'])}</td><td>{_metric(latency['median'])} ms</td></tr>"
+    )
+    ranking = []
+    for hit in result["ranking"][:10]:
+        grade = hit["grade"]
+        ranking.append(
+            f'<li class="hit grade-{grade}"><div class="hit-head"><span class="rank">#{hit["rank"]}</span>'
+            f'<strong>{_e(hit["id"])}</strong><span class="grade">Grade {grade}</span></div>'
+            f"<p>{_e(hit['text'])}</p><small>Score {_metric(hit['score'])} · "
+            f'<a href="{_e(hit["source_url"])}" target="_blank" rel="noopener">{_e(hit["title"])}</a></small></li>'
+        )
+    strategy_card = (
+        f'<details class="strategy"><summary><span>{_e(label)}</span>'
+        f"<span>top 10 · {_pct(metrics['recall_at_10'])} recall</span></summary>"
+        f'<ol class="hits">{"".join(ranking)}</ol></details>'
+    )
+    return summary_row, strategy_card
+
+
+def _render_query_strategies(
+    results: dict[str, EvaluatedStrategy],
+) -> tuple[list[str], list[str]]:
+    summary_rows: list[str] = []
+    strategy_cards: list[str] = []
+    for strategy, label in LABELS.items():
+        summary_row, strategy_card = _render_strategy(label, results[strategy])
+        summary_rows.append(summary_row)
+        strategy_cards.append(strategy_card)
+    return summary_rows, strategy_cards
+
+
+@dataclass(frozen=True)
+class RenderedQuery:
+    query_id: str
+    section: str
+    candidate_row: str
+    impact_row: str
+    candidate_coverage: dict[str, float]
+    fusion_lost_relevant_chunk: bool
+    impact_outcomes: dict[str, str]
+
+
+def _render_rank_changes(before: list[str], after: list[str], grades: dict[str, int]) -> str:
+    rows = []
+    for index, chunk_id in enumerate(after, 1):
+        previous_rank = before.index(chunk_id) + 1
+        delta = previous_rank - index
+        movement = f"↑ {delta}" if delta > 0 else f"↓ {abs(delta)}" if delta < 0 else "—"
+        rows.append(
+            f"<tr><td>{_e(chunk_id)}</td><td>{grades.get(chunk_id, 0)}</td>"
+            f"<td>{previous_rank}</td><td>{index}</td><td>{movement}</td></tr>"
+        )
+    return "".join(rows)
+
+
+def _render_query_impact(query_id: str, results: dict[str, EvaluatedStrategy]) -> tuple[str, dict[str, str]]:
+    deltas = {
+        metric: results["hybrid_colbert"]["metrics"][metric] - results["hybrid"]["metrics"][metric]
+        for metric in ("ndcg_at_5", "recall_at_10")
+    }
+    outcomes = {
+        metric: "win" if delta > 1e-9 else "loss" if delta < -1e-9 else "tie" for metric, delta in deltas.items()
+    }
+    latency_ratio = results["hybrid_colbert"]["latency_ms"]["median"] / results["hybrid"]["latency_ms"]["median"]
+    row = (
+        f'<tr><th scope="row"><a href="#{_e(query_id)}">{_e(query_id)}</a></th>'
+        + _delta_cell(deltas["ndcg_at_5"])
+        + _delta_cell(deltas["recall_at_10"], True)
+        + f"<td>{_one_decimal(latency_ratio)}×</td></tr>"
+    )
+    return row, outcomes
+
+
+def _render_query(
+    query: QueryReport, metric_tips: dict[str, str], retrieval_limit: int, rerank_limit: int
+) -> RenderedQuery:
+    results = query["strategies"]
+    summary_rows, strategy_cards = _render_query_strategies(results)
+    before = results["hybrid_colbert"]["inspection"]["candidate_ids_before"]
+    after = [row["id"] for row in results["hybrid_colbert"]["ranking"]]
+    relevant_ids = {item["id"] for item in query["relevant"]}
+    bm25_ids = {hit["id"] for hit in results["bm25"]["ranking"][:retrieval_limit]}
+    dense_ids = {hit["id"] for hit in results["dense"]["ranking"][:retrieval_limit]}
+    candidate_coverage = {
+        "bm25": len(relevant_ids & bm25_ids) / len(relevant_ids),
+        "dense": len(relevant_ids & dense_ids) / len(relevant_ids),
+        "union": len(relevant_ids & (bm25_ids | dense_ids)) / len(relevant_ids),
+        "rrf": len(relevant_ids & set(before)) / len(relevant_ids),
+    }
+    candidate_cells = (
+        f"<td>{_pct(candidate_coverage['bm25'])}</td><td>{_pct(candidate_coverage['dense'])}</td>"
+        f"<td>{_pct(candidate_coverage['union'])}</td><td>{_pct(candidate_coverage['rrf'])}</td>"
+    )
+    candidate_row = (
+        f'<tr><th scope="row"><a href="#{_e(query["id"])}">{_e(query["id"])}</a></th>' + candidate_cells + "</tr>"
+    )
+    impact_row, impact_outcomes = _render_query_impact(query["id"], results)
+    grades = {item["id"]: item["grade"] for item in query["relevant"]}
+    moves = _render_rank_changes(before, after, grades)
+    relevant_chips = "".join(
+        f'<span class="chip">{_e(item["id"])} · {item["grade"]}</span>' for item in query["relevant"]
+    )
+    missing = query["missing_before_colbert"]
+    missing_text = (
+        ", ".join(missing) if missing else f"No relevant chunks were excluded from the {rerank_limit} candidates."
+    )
+    section = (
+        f'<section class="query" id="{_e(query["id"])}"><div class="eyebrow">{_e(query["id"])} · information need</div>'
+        f'<h2>{_e(query["query"])}</h2><p class="need">{_e(query["information_need"])}</p>'
+        f'<div class="callout"><strong>Coverage before ColBERT: {_pct(_coverage_before(query))}</strong>'
+        f'<span>Missing: {_e(missing_text)}</span></div><div class="chips">{relevant_chips}</div>'
+        f'<div class="table-wrap"><table><caption>Strategy comparison</caption><thead><tr><th>Strategy</th>'
+        f"<th>{metric_tips['recall_at_5']}</th><th>{metric_tips['recall_at_10']}</th>"
+        f"<th>{metric_tips['ndcg_at_5']}</th><th>{metric_tips['ndcg_at_10']}</th><th>Median</th>"
+        f"</tr></thead><tbody>{''.join(summary_rows)}</tbody></table></div>"
+        f'<h3>Returned chunks</h3><div class="strategies">{"".join(strategy_cards)}</div>'
+        f'<details class="moves"><summary>View rank changes for the {rerank_limit} candidates</summary>'
+        f'<div class="table-wrap"><table><thead><tr><th>Chunk</th><th>Grade</th><th>RRF</th>'
+        f"<th>ColBERT</th><th>Change</th></tr></thead><tbody>{moves}</tbody></table></div></details></section>"
+    )
+    return RenderedQuery(
+        query_id=query["id"],
+        section=section,
+        candidate_row=candidate_row,
+        impact_row=impact_row,
+        candidate_coverage=candidate_coverage,
+        fusion_lost_relevant_chunk=candidate_coverage["union"] > candidate_coverage["rrf"],
+        impact_outcomes=impact_outcomes,
+    )
+
+
+def _impact_count(rendered: list[RenderedQuery], metric: str, outcome: str) -> int:
+    return sum(query.impact_outcomes[metric] == outcome for query in rendered)
+
+
+def _mean_coverage(rendered: list[RenderedQuery], stage: str) -> float:
+    return sum(query.candidate_coverage[stage] for query in rendered) / len(rendered)
+
+
+def _mean_metric(queries: list[QueryReport], strategy: str, metric: str) -> float:
+    return sum(query["strategies"][strategy]["metrics"][metric] for query in queries) / len(queries)
+
+
+def _strategy_averages(queries: list[QueryReport]) -> dict[str, dict[str, float]]:
+    return {
+        strategy: {
+            "recall_at_5": _mean_metric(queries, strategy, "recall_at_5"),
+            "recall_at_10": _mean_metric(queries, strategy, "recall_at_10"),
+            "ndcg_at_5": _mean_metric(queries, strategy, "ndcg_at_5"),
+            "ndcg_at_10": _mean_metric(queries, strategy, "ndcg_at_10"),
+        }
+        for strategy in LABELS
+    }
+
+
+def _strategy_median_latency(queries: list[QueryReport], strategy: str) -> float:
+    return median(query["strategies"][strategy]["latency_ms"]["median"] for query in queries)
+
+
+def _strategy_median_latencies(queries: list[QueryReport]) -> dict[str, float]:
+    return {strategy: _strategy_median_latency(queries, strategy) for strategy in LABELS}
+
+
+def _strategy_top_one_count(queries: list[QueryReport], strategy: str) -> int:
+    return sum(query["strategies"][strategy]["ranking"][0]["grade"] == 2 for query in queries)
+
+
+def _strategy_top_one_counts(queries: list[QueryReport]) -> dict[str, int]:
+    return {strategy: _strategy_top_one_count(queries, strategy) for strategy in LABELS}
+
+
 def render_html(data: PilotReport) -> str:
+    runtime = data["config"].get("runtime", {})
+    revision = runtime.get("git_commit", "unknown")
+    short_revision = revision[:12] if revision != "unknown" else revision
+    provenance = (
+        f"Source revision {_e(short_revision)} ({_e(runtime.get('git_tree_state', 'unknown'))}); "
+        f"Python {_e(runtime.get('python', 'unknown'))}; uv {_e(runtime.get('uv', 'unknown'))}; "
+        f"Qdrant {_e(runtime.get('qdrant', 'unknown'))}; uv.lock SHA-256 {_e(runtime.get('uv_lock_sha256', 'unknown'))}."
+    )
     metric_tips = {
         "recall_at_5": _tip(
             "Recall@5",
@@ -76,13 +262,24 @@ def render_html(data: PilotReport) -> str:
     retrieval_limit = data["config"]["candidates_per_strategy"]
     rerank_limit = data["config"]["colbert_candidates"]
     union_limit = retrieval_limit * 2
-    sections = []
-    lost_after_fusion = []
-    candidate_rows = []
-    impact_rows = []
-    candidate_coverage: dict[str, list[float]] = {"bm25": [], "dense": [], "union": [], "rrf": []}
-    impact_counts = {metric: {"win": 0, "tie": 0, "loss": 0} for metric in ("ndcg_at_5", "recall_at_10")}
-    query_count = len(data["queries"])
+    rendered_queries = [_render_query(query, metric_tips, retrieval_limit, rerank_limit) for query in data["queries"]]
+    sections = [query.section for query in rendered_queries]
+    lost_after_fusion = [query.query_id for query in rendered_queries if query.fusion_lost_relevant_chunk]
+    candidate_rows = [query.candidate_row for query in rendered_queries]
+    impact_rows = [query.impact_row for query in rendered_queries]
+    impact_counts = {
+        "ndcg_at_5": {
+            "win": _impact_count(rendered_queries, "ndcg_at_5", "win"),
+            "tie": _impact_count(rendered_queries, "ndcg_at_5", "tie"),
+            "loss": _impact_count(rendered_queries, "ndcg_at_5", "loss"),
+        },
+        "recall_at_10": {
+            "win": _impact_count(rendered_queries, "recall_at_10", "win"),
+            "tie": _impact_count(rendered_queries, "recall_at_10", "tie"),
+            "loss": _impact_count(rendered_queries, "recall_at_10", "loss"),
+        },
+    }
+    query_count = len(rendered_queries)
     source_count = data["config"].get("source_chunk_count", data["config"]["point_count"])
     skipped_ids = data["config"].get("skipped_chunk_ids", [])
     skipped_notice = (
@@ -91,100 +288,9 @@ def render_html(data: PilotReport) -> str:
         else ""
     )
     judgment_status = "Author-reviewed judgments." if not data["provisional_qrels"] else "Provisional judgments."
-    for query in data["queries"]:
-        results = query["strategies"]
-        summary_rows = []
-        strategy_cards = []
-        for strategy, label in LABELS.items():
-            result = results[strategy]
-            m = result["metrics"]
-            summary_rows.append(
-                f'<tr><th scope="row">{_e(label)}</th><td>{_pct(m["recall_at_5"])}</td><td>{_pct(m["recall_at_10"])}</td>'
-                f"<td>{_metric(m['ndcg_at_5'])}</td><td>{_metric(m['ndcg_at_10'])}</td>"
-                f"<td>{_metric(result['latency_ms']['median'])} ms</td></tr>"
-            )
-            ranking = []
-            for hit in result["ranking"][:10]:
-                grade = hit["grade"]
-                ranking.append(
-                    f'<li class="hit grade-{grade}"><div class="hit-head"><span class="rank">#{hit["rank"]}</span>'
-                    f'<strong>{_e(hit["id"])}</strong><span class="grade">Grade {grade}</span></div>'
-                    f"<p>{_e(hit['text'])}</p><small>Score {_metric(hit['score'])} · "
-                    f'<a href="{_e(hit["source_url"])}" target="_blank" rel="noopener">{_e(hit["title"])}</a></small></li>'
-                )
-            strategy_cards.append(
-                f'<details class="strategy"><summary><span>{_e(label)}</span><span>top 10 · {_pct(m["recall_at_10"])} recall</span></summary>'
-                f'<ol class="hits">{"".join(ranking)}</ol></details>'
-            )
-        before = results["hybrid_colbert"]["inspection"]["candidate_ids_before"]
-        after = [row["id"] for row in results["hybrid_colbert"]["ranking"]]
-        relevant_ids = {item["id"] for item in query["relevant"]}
-        bm25_ids = {hit["id"] for hit in results["bm25"]["ranking"][:retrieval_limit]}
-        dense_ids = {hit["id"] for hit in results["dense"]["ranking"][:retrieval_limit]}
-        pools = {"bm25": bm25_ids, "dense": dense_ids, "union": bm25_ids | dense_ids, "rrf": set(before)}
-        coverage_by_stage = {stage: len(relevant_ids & ids) / len(relevant_ids) for stage, ids in pools.items()}
-        if coverage_by_stage["union"] > coverage_by_stage["rrf"]:
-            lost_after_fusion.append(query["id"])
-        for stage, value in coverage_by_stage.items():
-            candidate_coverage[stage].append(value)
-        candidate_rows.append(
-            f'<tr><th scope="row"><a href="#{_e(query["id"])}">{_e(query["id"])}</a></th>'
-            + "".join(f"<td>{_pct(coverage_by_stage[stage])}</td>" for stage in candidate_coverage)
-            + "</tr>"
-        )
-        deltas = {}
-        for metric in impact_counts:
-            deltas[metric] = results["hybrid_colbert"]["metrics"][metric] - results["hybrid"]["metrics"][metric]
-            outcome = "win" if deltas[metric] > 1e-9 else "loss" if deltas[metric] < -1e-9 else "tie"
-            impact_counts[metric][outcome] += 1
-        impact_rows.append(
-            f'<tr><th scope="row"><a href="#{_e(query["id"])}">{_e(query["id"])}</a></th>'
-            + _delta_cell(deltas["ndcg_at_5"])
-            + _delta_cell(deltas["recall_at_10"], True)
-            + f"<td>{_one_decimal(results['hybrid_colbert']['latency_ms']['median'] / results['hybrid']['latency_ms']['median'])}×</td></tr>"
-        )
-        moves = []
-        grades = {item["id"]: item["grade"] for item in query["relevant"]}
-        for index, chunk_id in enumerate(after, 1):
-            old = before.index(chunk_id) + 1
-            delta = old - index
-            movement = f"↑ {delta}" if delta > 0 else f"↓ {abs(delta)}" if delta < 0 else "—"
-            moves.append(
-                f"<tr><td>{_e(chunk_id)}</td><td>{grades.get(chunk_id, 0)}</td><td>{old}</td><td>{index}</td><td>{movement}</td></tr>"
-            )
-        relevant_chips = "".join(
-            f'<span class="chip">{_e(item["id"])} · {item["grade"]}</span>' for item in query["relevant"]
-        )
-        missing = query["missing_before_colbert"]
-        missing_text = (
-            ", ".join(missing) if missing else f"No relevant chunks were excluded from the {rerank_limit} candidates."
-        )
-        sections.append(
-            f'<section class="query" id="{_e(query["id"])}"><div class="eyebrow">{_e(query["id"])} · information need</div>'
-            f'<h2>{_e(query["query"])}</h2><p class="need">{_e(query["information_need"])}</p>'
-            f'<div class="callout"><strong>Coverage before ColBERT: {_pct(_coverage_before(query))}</strong>'
-            f'<span>Missing: {_e(missing_text)}</span></div><div class="chips">{relevant_chips}</div>'
-            f'<div class="table-wrap"><table><caption>Strategy comparison</caption><thead><tr><th>Strategy</th><th>{metric_tips["recall_at_5"]}</th>'
-            f"<th>{metric_tips['recall_at_10']}</th><th>{metric_tips['ndcg_at_5']}</th><th>{metric_tips['ndcg_at_10']}</th><th>Median</th></tr></thead><tbody>{''.join(summary_rows)}</tbody></table></div>"
-            f'<h3>Returned chunks</h3><div class="strategies">{"".join(strategy_cards)}</div>'
-            f'<details class="moves"><summary>View rank changes for the {rerank_limit} candidates</summary><div class="table-wrap"><table>'
-            f"<thead><tr><th>Chunk</th><th>Grade</th><th>RRF</th><th>ColBERT</th><th>Change</th></tr></thead>"
-            f"<tbody>{''.join(moves)}</tbody></table></div></details></section>"
-        )
-    averages = {}
-    for strategy in LABELS:
-        averages[strategy] = {
-            name: sum(q["strategies"][strategy]["metrics"][name] for q in data["queries"]) / len(data["queries"])
-            for name in ("recall_at_5", "recall_at_10", "ndcg_at_5", "ndcg_at_10")
-        }
-    latency = {
-        strategy: median(q["strategies"][strategy]["latency_ms"]["median"] for q in data["queries"])
-        for strategy in LABELS
-    }
-    top_one = {
-        strategy: sum(q["strategies"][strategy]["ranking"][0]["grade"] == 2 for q in data["queries"])
-        for strategy in LABELS
-    }
+    averages = _strategy_averages(data["queries"])
+    latency = _strategy_median_latencies(data["queries"])
+    top_one = _strategy_top_one_counts(data["queries"])
     overview = "".join(
         f'<div class="overview-card"><span>{_e(label)}</span><strong>{_metric(averages[key]["ndcg_at_5"])}</strong>'
         f'<small>{metric_tips["ndcg_at_5"]} mean</small><div class="card-line">{metric_tips["recall_at_10"]} <b>{_pct(averages[key]["recall_at_10"])}</b></div>'
@@ -204,8 +310,11 @@ def render_html(data: PilotReport) -> str:
         if lost_after_fusion
         else "No relevant chunks found in the union were excluded by the RRF cutoff."
     )
-    candidate_average = "".join(
-        f"<td><strong>{_pct(sum(values) / query_count)}</strong></td>" for values in candidate_coverage.values()
+    candidate_average = (
+        f"<td><strong>{_pct(_mean_coverage(rendered_queries, 'bm25'))}</strong></td>"
+        f"<td><strong>{_pct(_mean_coverage(rendered_queries, 'dense'))}</strong></td>"
+        f"<td><strong>{_pct(_mean_coverage(rendered_queries, 'union'))}</strong></td>"
+        f"<td><strong>{_pct(_mean_coverage(rendered_queries, 'rrf'))}</strong></td>"
     )
     impact_explanation = (
         "RRF and ColBERT contain the same 10 IDs, so Recall@10 ties by construction. "
@@ -213,10 +322,11 @@ def render_html(data: PilotReport) -> str:
         if rerank_limit == 10
         else "nDCG@5 describes top-ranked ordering. Recall@10 measures relevant chunks retained in the top ten."
     )
-    impact_summary = "".join(
-        f'<tr><th scope="row">{_e(label)}</th><td>{counts["win"]}</td><td>{counts["tie"]}</td><td>{counts["loss"]}</td></tr>'
-        for metric, label in (("ndcg_at_5", "nDCG@5"), ("recall_at_10", "Recall@10"))
-        for counts in (impact_counts[metric],)
+    impact_summary = (
+        f'<tr><th scope="row">nDCG@5</th><td>{impact_counts["ndcg_at_5"]["win"]}</td>'
+        f"<td>{impact_counts['ndcg_at_5']['tie']}</td><td>{impact_counts['ndcg_at_5']['loss']}</td></tr>"
+        f'<tr><th scope="row">Recall@10</th><td>{impact_counts["recall_at_10"]["win"]}</td>'
+        f"<td>{impact_counts['recall_at_10']['tie']}</td><td>{impact_counts['recall_at_10']['loss']}</td></tr>"
     )
     links = "".join(f'<a href="#{_e(q["id"])}">{_e(q["id"])} · {_e(q["query"])}</a>' for q in data["queries"])
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -255,6 +365,6 @@ h2{{font-size:clamp(1.45rem,3vw,2.2rem);line-height:1.18;margin:8px 0}}h3{{margi
 <p class="table-note">Positive deltas favor ColBERT. Latency compares medians for the same query after warmup; it does not represent financial cost.</p></section>
 <details class="definitions-details"><summary>How to read Recall and nDCG</summary><div class="definitions"><div class="definition"><strong>Recall@k · how many did we find?</strong><p>What fraction of grade-1/2 chunks appears in the first k results? Example: 4 of 5 relevant chunks in the top 10 = 80%.</p></div>
 <div class="definition"><strong>nDCG@k · how good is the order?</strong><p>Ranges from 0 to 1. Rewards grade-2 chunks and higher positions; 1 represents the ideal order for this query's judgments.</p></div></div></details>
-<p class="method">Typical latency = median of per-query medians ({data["config"]["timed_runs_per_query_strategy"]} timed runs after warmup). Includes query encoding and Qdrant; excludes HTTP. This small local run does not represent production.</p>
+<p class="method">Typical latency = median of per-query medians ({data["config"]["timed_runs_per_query_strategy"]} timed runs after warmup). Includes query encoding and Qdrant; excludes HTTP. This small local run does not represent production. {provenance}</p>
 <nav aria-label="Jump to query">{links}</nav>{"".join(sections)}
 <footer>Recall treats grades 1 and 2 as relevant. nDCG uses gain 2<sup>grade</sup> − 1. Latencies are medians of {data["config"]["timed_runs_per_query_strategy"]} runs after warmup, including query encoding and Qdrant, excluding HTTP. Full data in <code>pilot.json</code>.<br>Judgments SHA-256: <code>{_e(data["inputs"]["qrels_sha256"])}</code>.</footer></main></body></html>"""

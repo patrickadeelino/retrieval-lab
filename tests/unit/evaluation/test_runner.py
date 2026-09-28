@@ -56,3 +56,10 @@ def test_colbert_cannot_change_candidate_set(evaluation_case) -> None:
     case.rankings["hybrid_colbert"] = ["a", "b"]
     with pytest.raises(RuntimeError, match="changed the candidate set"):
         runner.evaluate(*case.paths, repeats=1)
+
+
+def test_evaluation_requires_colbert_pool_to_match_hybrid_ranking(evaluation_case) -> None:
+    case = evaluation_case
+    case.colbert_candidates[:] = ["a", "b", "c"]
+    with pytest.raises(RuntimeError, match="candidate pool differs from hybrid"):
+        runner.evaluate(*case.paths, repeats=1)

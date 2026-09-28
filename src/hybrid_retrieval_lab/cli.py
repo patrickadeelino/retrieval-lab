@@ -31,7 +31,7 @@ def main() -> None:
     parser.add_argument("--corpus", type=Path, default=Path("data/corpus/chunks.jsonl"))
     parser.add_argument("--queries", type=Path, default=Path("data/queries/pilot-queries.jsonl"))
     parser.add_argument("--qrels", type=Path, default=Path("data/qrels/pilot-proposed.jsonl"))
-    parser.add_argument("--output", type=Path, default=Path("reports/pilot"))
+    parser.add_argument("--output", type=Path, default=Path("reports/baseline"))
     parser.add_argument("--reviewed-qrels", action="store_true")
     args = parser.parse_args()
     configure_logging()

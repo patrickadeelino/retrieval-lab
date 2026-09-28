@@ -49,9 +49,10 @@ def evaluation_case(tmp_path, monkeypatch):
         return StrategyResult(
             hits,
             "bm25",
-            {"bm25": rankings["bm25"], "dense": rankings["dense"], "colbert_candidates_before": rankings["hybrid"]},
+            {"bm25": rankings["bm25"], "dense": rankings["dense"], "colbert_candidates_before": colbert_candidates},
         )
 
+    colbert_candidates = list(rankings["hybrid"])
     client = SimpleNamespace(info=lambda: SimpleNamespace(version="test"))
     monkeypatch.setattr(runner, "QdrantClient", lambda **kwargs: client)
     monkeypatch.setattr(
@@ -60,4 +61,10 @@ def evaluation_case(tmp_path, monkeypatch):
         lambda *args: SimpleNamespace(indexed_ids=["a", "b", "c"], skipped_chunks=[], model_dump=lambda: {}),
     )
     monkeypatch.setattr(runner, "create_search_service", lambda **kwargs: SimpleNamespace(search=search))
-    return SimpleNamespace(paths=(corpus, queries, qrels), qrels=qrels, calls=calls, rankings=rankings)
+    return SimpleNamespace(
+        paths=(corpus, queries, qrels),
+        qrels=qrels,
+        calls=calls,
+        rankings=rankings,
+        colbert_candidates=colbert_candidates,
+    )
