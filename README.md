@@ -1,113 +1,141 @@
 # Retrieval Lab
 
-A Python retrieval API and an inspectable experiment comparing **BM25, dense retrieval, RRF fusion, and ColBERT reranking** over a frozen Portuguese GitHub documentation corpus. It returns ranked chunks without generating answers.
+**Four retrieval strategies. One frozen Portuguese corpus. A reproducible evaluation.**
 
-[![CI](https://github.com/patrickadeelino/retrieval-lab/actions/workflows/quality.yml/badge.svg?branch=main)](https://github.com/patrickadeelino/retrieval-lab/actions/workflows/quality.yml)
+BM25, dense embeddings, RRF fusion and ColBERT reranking, compared through one Python API. The service returns ranked chunks from six GitHub Docs pages; it does not generate answers.
+
 [![Unit test coverage](https://img.shields.io/badge/unit%20coverage-79.45%25-brightgreen)](docs/development.md#coverage)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](pyproject.toml)
 
-[![Documentation](docs/assets/documentation.svg)](docs/README.md)
-[![Test guide](docs/assets/tests.svg)](docs/development.md)
-[![Pilot: 10 queries](docs/assets/report.svg)](docs/evaluation.md)
+This is the implementation companion to the [Fundamentos de Information Retrieval blog series](https://www.patrickadelino.com.br/series/information-retrieval/) (Portuguese). The articles explain the concepts; this repository brings them together and measures their behavior on a judged corpus. See the [article-to-code map](#companion-to-the-blog-series).
 
-## What the experiment shows
+[Results](#results) · [How it works](#how-it-works) · [Quickstart](#quickstart) · [Method and limitations](#method-and-limitations) · [Documentation](docs/README.md)
 
-The reviewed pilot contains **53 chunks, 10 queries, and 530 relevance judgments**.
+## Results
 
-| Strategy | Mean nDCG@5 | Mean Recall@10 | Typical latency |
-| --- | ---: | ---: | ---: |
-| BM25 | 0.777 | 91.0% | 1.96 ms |
-| Dense E5 | 0.713 | 84.7% | 15.45 ms |
-| Hybrid RRF | 0.797 | 94.3% | 15.94 ms |
-| Hybrid + ColBERT | 0.868 | 94.3% | 171.93 ms |
+The pilot uses the same 53 chunks, 10 queries and 530 relevance judgments for every strategy. The API selects a strategy with one request parameter.
 
-ColBERT improved average ordering at the top with about **10.8×** the typical latency of hybrid retrieval. It reranks the same ten candidates, so Recall@10 is unchanged by construction. The clean-clone run at commit `5e9dc69` reproduced all 40 query/strategy rankings and the quality metrics from the previous validated report; absolute latency varied. These are descriptive results from this pilot, not a general benchmark or production SLA. See the [HTML report](reports/baseline/index.html) and its [source JSON](reports/baseline/pilot.json).
+| Strategy | Pipeline | Mean nDCG@5 | Mean Recall@10 | Typical latency |
+| --- | --- | ---: | ---: | ---: |
+| `bm25` | BM25 | 0.777 | 91.0% | 1.96 ms |
+| `dense` | E5 | 0.713 | 84.7% | 15.45 ms |
+| `hybrid` | BM25 + E5 → RRF | 0.797 | 94.3% | 15.94 ms |
+| `hybrid_colbert` | BM25 + E5 → RRF → ColBERT | **0.868** | 94.3% | 171.93 ms |
 
-Typical latency is the median of per-query medians, with three timed runs after warmup. It includes query encoding and Qdrant, but excludes HTTP. [Method and limitations](docs/evaluation.md) · [Reproduction and recovery procedure](docs/reproduction-and-recovery.md) · [Report publication status](reports/README.md).
+- **Fusion increased Recall@10 in this pilot.** Hybrid retrieved 94.3% of the judged relevant chunks, compared with 91.0% for BM25 and 84.7% for dense retrieval.
+- **ColBERT changed ordering, not candidate coverage.** It reranks the same ten hybrid candidates, so Recall@10 is equal by construction. Mean nDCG@5 rose from 0.797 to 0.868, with about **10.8×** the typical latency.
+- **Results varied by query.** Dense scored 0.101 on q10, where BM25 scored 0.899. ColBERT raised q09 (an exact error message) from 0.562 to 0.847, and lowered q01 from 0.695 to 0.647.
 
-## Retrieval flow
+With ten queries and one annotator, these results are diagnostic rather than a benchmark; differences are suggestive, not conclusive. Typical latency is the median of per-query medians across three timed runs after warmup. It includes query encoding and Qdrant, but excludes HTTP.
+
+See the [HTML report](reports/baseline/index.html), [source JSON](reports/baseline/pilot.json), and [evaluation method](docs/evaluation.md).
+
+## How it works
+
+The four API strategies are stopping points along one retrieval pipeline. BM25 and dense return their own rankings; hybrid fuses both candidate lists; hybrid_colbert adds a reranking step.
 
 ```mermaid
-%%{init: {"flowchart": {"nodeSpacing": 108, "rankSpacing": 60}}}%%
-flowchart TD
-    HTTP[POST /search] --> Service[SearchService]
-    Offline[Offline evaluator] --> Service
-    Service --> Factory{Strategy factory}
-
-    Factory -->|bm25| BM25["<div style='width:280px'>BM25: top 10</div>"]
-    Factory -->|dense| E5["<div style='width:280px'>E5 embeddings: top 10</div>"]
-    Factory -->|hybrid| Hybrid[Hybrid strategy]
-    Factory -->|hybrid_colbert| Reranking[Hybrid + ColBERT strategy]
-
-    Hybrid --> HBM25[BM25: top 10]
-    Hybrid --> HE5[E5 embeddings: top 10]
-    HBM25 --> HRRF[RRF k=60: top 10]
-    HE5 --> HRRF
-
-    Reranking --> CBM25[BM25: top 10]
-    Reranking --> CE5[E5 embeddings: top 10]
-    CBM25 --> CRRF[RRF k=60: top 10]
-    CE5 --> CRRF
-    CRRF --> ColBERT[ColBERT: rerank the same 10 candidates]
-
-    %% Equal total branch lengths keep all four strategy entries on the same rank.
-    BM25 ------> End[Return results]
-    E5 ------> End
-    HRRF ----> End
-    ColBERT ---> End
+flowchart LR
+    Q([Query]) --> BM25[BM25<br/>lexical · top 10]
+    Q --> E5[E5<br/>semantic · top 10]
+    BM25 --> RRF[RRF fusion<br/>k = 60 · top 10]
+    E5 --> RRF
+    RRF --> COL[ColBERT<br/>rerank the same 10]
 ```
 
-The factory selects one of four strategies. BM25 and dense return their own rankings; hybrid fuses both top-10 lists and keeps at most 10 candidates; hybrid_colbert reranks only those fused candidates. The service then applies the requested response limit (default 5, maximum 10). Models load lazily; documents are encoded during ingestion. [Architecture and API contract](docs/architecture.md).
+`bm25` returns after lexical retrieval, `dense` after E5, `hybrid` after RRF, and `hybrid_colbert` after ColBERT.
 
-## Run locally
+- **One service, two callers.** `POST /search` and the offline evaluator share `SearchService`, so the report exercises the retrieval service used by the API.
+- **Strategy protocol and factory.** Each strategy implements the same protocol and the factory selects it from the request value.
+- **Three representations in each indexed Qdrant collection.** Chunks have a sparse BM25 vector, a 384-dimensional E5 vector and a ColBERT multivector with 128 dimensions per token.
+- **ColBERT reuses the hybrid candidates.** Qdrant applies MaxSim to the fused candidate IDs; reranking is checked against the original candidate set.
+- **Verified index publication.** Indexing builds and verifies a versioned collection against a manifest before atomically switching the active alias.
 
-Requires Docker with Compose, internet access for initial downloads, and disk space for Qdrant and the model cache. ColBERT downloads approximately 2.2 GB; its cache workaround may duplicate roughly that amount. Python 3.11+ is needed for local development and optional report/review servers.
+See the [architecture and HTTP contract](docs/architecture.md).
 
-From the repository root, install the exact dependency set in `uv.lock`:
+## Quickstart
+
+Requires Docker with Compose and internet access for the initial model downloads. The ColBERT model is about 2.2 GB.
 
 ```bash
-uv sync --locked --extra dev
 docker compose build
 docker compose up -d qdrant
-docker compose stop api
 docker compose run --rm -e LOG_FILE=/tmp/index-run.log api python -m hybrid_retrieval_lab.cli index
 docker compose up -d api
+```
+
+Query the API:
+
+```bash
 curl -sS http://127.0.0.1:8000/search \
   -H 'Content-Type: application/json' \
   -d '{"query":"Para que serve X-GitHub-Delivery?","strategy":"hybrid_colbert","limit":5,"inspect":true}'
 ```
 
-The Portuguese example matches the corpus language. Open [API documentation](http://127.0.0.1:8000/docs). Strategies: `bm25`, `dense`, `hybrid`, `hybrid_colbert`. The response `limit` defaults to 5 and accepts 1–10. Inspection exposes intermediate rankings and fusion contributions.
+The query is in Portuguese to match the corpus. Set `inspect` to `true` to see the intermediate BM25 and dense rankings and each chunk's RRF contribution. Open the interactive [API docs](http://127.0.0.1:8000/docs).
 
-**Indexing builds and validates a versioned collection before atomically switching the `github_docs_pilot_active` alias.** A timeout during that switch is reconciled against Qdrant before cleanup; an unknown state retains both generations for inspection. Stop the API before reindexing, then restart it to clear cached resources. Oversized chunks are skipped individually; oversized E5 queries return HTTP 422. See [index identity and token policy](docs/index-validation-and-token-budget.md) and the [recovery steps](docs/reproduction-and-recovery.md#recover-after-an-indexing-error).
+Before reindexing, stop the API with `docker compose stop api`; see [reproduction and recovery](docs/reproduction-and-recovery.md). To develop locally, run `uv sync --locked --extra dev`, then follow the [development guide](docs/development.md) for lint, strict typing and unit/integration tests.
 
-Stop with `docker compose down`; named volumes retain the index and models. JSON logs are written to `logs/hybrid-retrieval-lab.log`, correlated by request ID. [Logging configuration](docs/observability.md).
+### Reproduce the report
 
-## Reproduce the report
-
-The canonical clean-clone baseline is available as the [HTML report](reports/baseline/index.html) and [machine-readable JSON](reports/baseline/pilot.json). The report records rankings, quality metrics, latency samples, input hashes, model snapshots and runtime provenance.
-
-To inspect the report locally, serve the saved HTML without rerunning evaluation:
+The saved baseline can be viewed without running the models:
 
 ```bash
 python -m http.server 8770 --bind 127.0.0.1 --directory reports/baseline
 ```
 
-Follow the [clean-clone reproduction procedure](docs/reproduction-and-recovery.md). It records the Git revision, worktree state, lockfile hash, model snapshots and input hashes. Avoid concurrent model workloads while timing. The evaluator validates the index identity before searching. [Evaluation method and limitations](docs/evaluation.md).
+For a clean-clone reproduction, follow the [reproduction procedure](docs/reproduction-and-recovery.md). It records the Git revision, worktree state, lockfile hash, model snapshots and input hashes. Avoid running other model workloads during timing.
 
-## Review relevance judgments
+## Method and limitations
 
-```bash
-python scripts/review_qrels.py
+### What supports this comparison
+
+- **Frozen, hashed corpus.** Six source pages produce 53 chunks; the manifest records SHA-256 hashes.
+- **Exhaustive judgments.** All 530 query/chunk pairs have an explicit grade from 0 to 2, so the evaluation has no unjudged chunks within this corpus.
+- **Verified index identity.** Evaluation stops if the corpus, encoder snapshots or stored vectors differ from the manifest.
+- **Clean-clone reproduction.** All 40 query/strategy rankings matched the previous validated report. The report records the commit, `uv.lock` hash and model snapshots; absolute latency varied between runs.
+
+### What it cannot establish
+
+- The queries were written by the author after reviewing the corpus, and all grades were assigned by one annotator. They are not production traffic or an independent benchmark. See [judgment provenance](docs/evaluation.md#judgment-provenance).
+- The corpus has only 53 chunks from one domain.
+- Model size and retrieval technique are confounded: `jina-colbert-v2` is much larger than `multilingual-e5-small`, so the observed gain cannot be attributed to late interaction alone.
+- ColBERT reranks only ten candidates; this experiment does not separate reranking quality from candidate generation over the full corpus.
+- Latency comes from one local machine and excludes HTTP.
+- `jinaai/jina-colbert-v2` is licensed CC BY-NC 4.0, which restricts commercial use.
+
+The [HTML report](reports/baseline/index.html) contains per-query rankings, candidate coverage, latency samples and configuration details. See [evaluation methodology and limitations](docs/evaluation.md).
+
+## Companion to the blog series
+
+The series builds from retrieval fundamentals to hybrid search. These articles connect those concepts to their implementation in this repository.
+
+| Article (PT) | Where it appears in this repository |
+| --- | --- |
+| [O que é Information Retrieval?](https://www.patrickadelino.com.br/series/information-retrieval/o-que-sao-information-retrieval/introducao/) | Overall flow: query → candidates → ranking |
+| [Busca Baseada em Termos: TF-IDF, índice invertido e BM25](https://www.patrickadelino.com.br/series/information-retrieval/term-based-retrieval/introducao/) | [`encoders/bm25.py`](src/hybrid_retrieval_lab/encoders/bm25.py), [`strategy/bm25.py`](src/hybrid_retrieval_lab/services/search/strategy/bm25.py) |
+| [Busca Semântica: embeddings, vetores e similaridade de cosseno](https://www.patrickadelino.com.br/series/information-retrieval/embeddings-busca-semantica/introducao/) | [`encoders/e5.py`](src/hybrid_retrieval_lab/encoders/e5.py), [`strategy/dense.py`](src/hybrid_retrieval_lab/services/search/strategy/dense.py) |
+| [Chunking: Tamanho fixo, estrutural e semântico](https://www.patrickadelino.com.br/series/information-retrieval/chunking/introducao/) | [`ingestion/chunker.py`](src/hybrid_retrieval_lab/ingestion/chunker.py) (section-aware, capped at 1,600 characters) |
+| [Vector Databases: armazenamento, indexação e busca vetorial com Qdrant](https://www.patrickadelino.com.br/series/information-retrieval/vector-databases/por-que-usar-um-vector-database/) | [`ingestion/indexer.py`](src/hybrid_retrieval_lab/ingestion/indexer.py), [`ingestion/identity.py`](src/hybrid_retrieval_lab/ingestion/identity.py) |
+| [Hybrid Search: BM25 e embeddings, RRF e reranking](https://www.patrickadelino.com.br/series/information-retrieval/hybrid-search-reranking/quando-a-pergunta-pede-mais-de-um-sinal/) | [`strategy/hybrid.py`](src/hybrid_retrieval_lab/services/search/strategy/hybrid.py), [`strategy/colbert.py`](src/hybrid_retrieval_lab/services/search/strategy/colbert.py) |
+
+More writing at [patrickadelino.com.br](https://www.patrickadelino.com.br/).
+
+## Repository map
+
+```text
+src/hybrid_retrieval_lab/
+  api/          HTTP adapter (FastAPI)
+  encoders/     BM25, E5 and ColBERT adapters, token budget
+  ingestion/    chunking, indexing, index manifest and verification
+  services/     SearchService, strategy protocol, factory and retrieval
+  evaluation/   metrics, runner and HTML report
+data/           corpus, queries and relevance judgments
+reports/        canonical baseline (HTML and JSON)
+tests/          unit (doubles) and integration (Qdrant and encoders)
+docs/           architecture, evaluation, observability and reproduction
 ```
-
-Open [the review screen](http://127.0.0.1:8765) to inspect every chunk and edit grades and reasons. Changes save immediately to `data/qrels/pilot-proposed.jsonl`; despite its historical name, it contains reviewed judgments. Use `--port 8766` if necessary; stop with `Ctrl+C`. [Relevance rubric](docs/evaluation.md#relevance-rubric).
-
-## Development and status
-
-Unit tests use explicit doubles without Qdrant or downloads. Integration tests use real Qdrant and encoders in isolated collections. Ruff checks lint/format; mypy runs strictly over source and scripts. GitHub Actions is configured for **unit tests and static checks only**. The CI badge tracks the main-branch workflow. The coverage badge shows the latest unit-test coverage (including branches) and is updated manually after running the coverage command documented in [coverage setup and reports](docs/development.md#coverage). Integration coverage is measured separately; coverage spans the Python package and scripts.
-
-See the [development guide](docs/development.md) and [documentation index](docs/README.md). The project is published as [patrickadeelino/retrieval-lab](https://github.com/patrickadeelino/retrieval-lab).
 
 ## License
 
-The original code in this repository is licensed under the [MIT License](LICENSE). This license does not apply to third-party models or the GitHub Docs corpus; see [third-party notices](docs/third-party-notices.md). In particular, `jinaai/jina-colbert-v2` declares **CC BY-NC 4.0**, which restricts commercial use.
+The original code is licensed under the [MIT License](LICENSE). The license does not apply to third-party models or the GitHub Docs corpus (CC BY 4.0); see [third-party notices](docs/third-party-notices.md).
