@@ -5,5 +5,7 @@ __pycache__
 data/corpus/pages.jsonl
 data/queries/initial-queries.jsonl
 data/qrels
+reports
+logs
 docs
 scripts

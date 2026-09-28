@@ -17,27 +17,33 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: 0.11.3
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
           python-version: '3.11'
-          cache: pip
 
       - name: Install project and development tools
-        run: python -m pip install -e '.[dev]'
+        run: uv sync --locked --extra dev
 
       - name: Lint
-        run: ruff check src scripts tests
+        run: uv run --locked ruff check src scripts tests
 
       - name: Check formatting
-        run: ruff format --check src scripts tests
+        run: uv run --locked ruff format --check src scripts tests
 
       - name: Check types
-        run: mypy
+        run: uv run --locked mypy
 
       - name: Run unit tests with coverage
         run: >-
-          pytest -q -m unit tests/unit --cov
+          uv run --locked pytest -q -m unit tests/unit --cov
           --cov-report=term-missing
           --cov-report=xml:coverage.xml
           --cov-report=json:coverage.json
