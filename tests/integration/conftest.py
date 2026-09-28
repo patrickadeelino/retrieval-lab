@@ -8,6 +8,7 @@ import pytest
 from qdrant_client import QdrantClient, models
 
 from hybrid_retrieval_lab.ingestion.indexer import index_corpus
+from hybrid_retrieval_lab.ingestion.loader import load_chunks
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
@@ -22,8 +23,9 @@ def indexed_collection() -> tuple[QdrantClient, str]:
     collection = f"test_hrl_{uuid.uuid4().hex}"
     assert collection != os.getenv("QDRANT_COLLECTION", "github_docs_pilot_active")
     corpus = Path("data/corpus/chunks.jsonl")
+    expected_count = len(load_chunks(corpus))
     try:
-        assert index_corpus(client, collection, corpus) == 53
+        assert index_corpus(client, collection, corpus) == expected_count
         yield client, collection
     finally:
         aliases = [item for item in client.get_aliases().aliases if item.alias_name == collection]

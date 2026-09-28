@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import textwrap
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from typing import TypedDict
 
 
@@ -28,21 +27,36 @@ class Chunk(TypedDict):
     text: str
 
 
-MAX_CHARS = 1600
-
-
-def _wrap_block(block: str, max_chars: int) -> list[str]:
-    return textwrap.wrap(
-        block,
-        width=max_chars,
-        break_long_words=False,
-        break_on_hyphens=False,
-    )
-
-
-def _iter_wrapped_blocks(blocks: Sequence[str], max_chars: int) -> Iterator[str]:
+def _iter_token_bounded_blocks(
+    blocks: Sequence[str], max_tokens: int, token_count: Callable[[str], int]
+) -> Iterator[str]:
     for block in blocks:
-        yield from _wrap_block(block, max_chars)
+        if token_count(block) <= max_tokens:
+            yield block
+            continue
+        yield from _split_block_by_tokens(block, max_tokens, token_count)
+
+
+def _split_block_by_tokens(block: str, max_tokens: int, token_count: Callable[[str], int]) -> Iterator[str]:
+    words = block.split()
+    group: list[str] = []
+    for word in words:
+        if token_count(word) > max_tokens:
+            if group:
+                yield " ".join(group)
+                group = []
+            # Keep an indivisible over-budget word isolated. The indexer records and
+            # skips that one chunk rather than losing the rest of the source page.
+            yield word
+            continue
+        candidate = " ".join((*group, word))
+        if group and token_count(candidate) > max_tokens:
+            yield " ".join(group)
+            group = [word]
+        else:
+            group.append(word)
+    if group:
+        yield " ".join(group)
 
 
 def _make_chunk(page: Page, section: Section, blocks: list[str], ordinal: int) -> Chunk:
@@ -56,35 +70,44 @@ def _make_chunk(page: Page, section: Section, blocks: list[str], ordinal: int) -
     }
 
 
-def _chunks_for_section(page: Page, section: Section, first_ordinal: int, max_chars: int) -> list[Chunk]:
+def _chunks_for_section(
+    page: Page,
+    section: Section,
+    first_ordinal: int,
+    max_tokens: int,
+    token_count: Callable[[str], int],
+) -> list[Chunk]:
     chunks: list[Chunk] = []
     group: list[str] = []
-    size = 0
-    for block in _iter_wrapped_blocks(section["blocks"], max_chars):
-        if group and size + len(block) + 2 > max_chars:
+    for block in _iter_token_bounded_blocks(section["blocks"], max_tokens, token_count):
+        candidate = "\n\n".join((*group, block))
+        exceeds_tokens = group and token_count(candidate) > max_tokens
+        if exceeds_tokens:
             chunks.append(_make_chunk(page, section, group, first_ordinal + len(chunks)))
             group = []
-            size = 0
         group.append(block)
-        size += len(block) + 2
     if group:
         chunks.append(_make_chunk(page, section, group, first_ordinal + len(chunks)))
     return chunks
 
 
-def _chunks_for_page(page: Page, max_chars: int) -> list[Chunk]:
+def _chunks_for_page(page: Page, max_tokens: int, token_count: Callable[[str], int]) -> list[Chunk]:
     chunks: list[Chunk] = []
     for section in page["sections"]:
         first_ordinal = len(chunks) + 1
-        chunks.extend(_chunks_for_section(page, section, first_ordinal, max_chars))
+        chunks.extend(_chunks_for_section(page, section, first_ordinal, max_tokens, token_count))
     return chunks
 
 
-def chunk_pages(pages: Sequence[Page], max_chars: int = MAX_CHARS) -> list[Chunk]:
-    """Chunk pages in source order while retaining source and section metadata."""
-    if max_chars < 1:
-        raise ValueError("max_chars must be positive")
+def chunk_pages(
+    pages: Sequence[Page],
+    token_count: Callable[[str], int],
+    max_tokens: int,
+) -> list[Chunk]:
+    """Chunk pages to the model-token budget while retaining source metadata."""
+    if max_tokens < 1:
+        raise ValueError("max_tokens must be positive")
     chunks: list[Chunk] = []
     for page in pages:
-        chunks.extend(_chunks_for_page(page, max_chars))
+        chunks.extend(_chunks_for_page(page, max_tokens, token_count))
     return chunks

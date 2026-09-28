@@ -42,10 +42,15 @@ class E5Encoder:
         load_tokenizer = cast(TokenizerLoader, AutoTokenizer.from_pretrained)
         self.tokenizer = load_tokenizer(str(directory), local_files_only=True, use_fast=True)
 
+    def _token_count(self, text: str, prefix: str) -> int:
+        return len(self.tokenizer.encode(f"{prefix}: {text}", add_special_tokens=True, truncation=False, verbose=False))
+
+    def passage_token_count(self, text: str) -> int:
+        """Count passage tokens exactly as the E5 model receives them."""
+        return self._token_count(text, "passage")
+
     def _validate(self, text: str, prefix: str, input_kind: str) -> int:
-        count = len(
-            self.tokenizer.encode(f"{prefix}: {text}", add_special_tokens=True, truncation=False, verbose=False)
-        )
+        count = self._token_count(text, prefix)
         if count > MAX_TOKENS:
             raise TokenLimitError(MODEL_NAME, input_kind, count, MAX_TOKENS)
         return count

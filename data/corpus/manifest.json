@@ -49,5 +49,8 @@
   ],
   "extraction": "scripts/build_corpus.py:extract",
   "chunking": "src/hybrid_retrieval_lab/ingestion/chunker.py:chunk_pages",
-  "max_chunk_chars_target": 1600
+  "max_chunk_tokens_target": 512,
+  "tokenizer_model": "intfloat/multilingual-e5-small",
+  "tokenizer_revision": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+  "token_count_includes_passage_prefix_and_special_tokens": true
 }

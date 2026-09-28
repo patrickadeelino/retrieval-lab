@@ -32,3 +32,23 @@ def test_query_budget_includes_prefix_and_special_tokens_before_embedding(count:
         with pytest.raises(TokenLimitError, match="513.*512-token"):
             encoder.query("question")
         assert calls == []
+
+
+def test_passage_token_count_uses_e5_prefix_special_tokens_and_disables_truncation() -> None:
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    class FakeTokenizer:
+        def encode(self, text: str, **kwargs: object) -> list[int]:
+            calls.append((text, kwargs))
+            return [1, 2, 3, 4]
+
+    encoder = E5Encoder.__new__(E5Encoder)
+    encoder.tokenizer = FakeTokenizer()
+
+    assert encoder.passage_token_count("chunk text") == 4
+    assert calls == [
+        (
+            "passage: chunk text",
+            {"add_special_tokens": True, "truncation": False, "verbose": False},
+        )
+    ]

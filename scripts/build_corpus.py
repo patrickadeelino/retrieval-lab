@@ -13,7 +13,8 @@ from pathlib import Path
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 
-from hybrid_retrieval_lab.ingestion.chunker import MAX_CHARS, Page, Section, chunk_pages
+from hybrid_retrieval_lab.encoders.e5 import MAX_TOKENS, MODEL_NAME, E5Encoder
+from hybrid_retrieval_lab.ingestion.chunker import Page, Section, chunk_pages
 
 SOURCES = {
     "webhook-best-practices": "https://docs.github.com/pt/webhooks/using-webhooks/best-practices-for-using-webhooks",
@@ -152,7 +153,6 @@ def main() -> None:
                     "sources": sources,
                     "extraction": "scripts/build_corpus.py:extract",
                     "chunking": "src/hybrid_retrieval_lab/ingestion/chunker.py:chunk_pages",
-                    "max_chunk_chars_target": MAX_CHARS,
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -162,9 +162,22 @@ def main() -> None:
         )
     else:
         pages = read_pages(pages_path)
-    chunks = chunk_pages(pages)
+    encoder = E5Encoder()
+    chunks = chunk_pages(pages, token_count=encoder.passage_token_count, max_tokens=MAX_TOKENS)
     write_jsonl(corpus_dir / "chunks.jsonl", chunks)
+    corpus_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    corpus_manifest.update(
+        {
+            "max_chunk_tokens_target": MAX_TOKENS,
+            "tokenizer_model": MODEL_NAME,
+            "tokenizer_revision": encoder.revision,
+            "token_count_includes_passage_prefix_and_special_tokens": True,
+        }
+    )
+    corpus_manifest.pop("max_chunk_chars_target", None)
+    manifest_path.write_text(json.dumps(corpus_manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"{len(pages)} pages, {len(chunks)} chunks")
+    print(f"tokenizer: {MODEL_NAME} @ {encoder.revision}; max passage tokens: {MAX_TOKENS}")
     for page in pages:
         count = sum(chunk["source_id"] == page["id"] for chunk in chunks)
         print(f"  {page['id']}: {count} chunks")
