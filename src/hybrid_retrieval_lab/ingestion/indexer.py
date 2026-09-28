@@ -47,6 +47,14 @@ def _publish_alias(client: QdrantClient, alias: str, target: str, previous: str 
     client.update_collection_aliases(change_aliases_operations=operations)
 
 
+def _delete_generation_safely(client: QdrantClient, collection: str, alias: str, event: str) -> None:
+    try:
+        if client.collection_exists(collection):
+            client.delete_collection(collection)
+    except Exception:
+        logger.exception(event, extra={"fields": {"alias": alias, "collection": collection}})
+
+
 def _temporary_collection_name(alias: str) -> str:
     return f"{alias}_index_{uuid.uuid4().hex}"
 
@@ -155,8 +163,7 @@ def index_corpus(
             extra={"fields": {"alias": collection, "physical_collection": target, "point_count": count}},
         )
     except Exception:
-        if client.collection_exists(target):
-            client.delete_collection(target)
+        _delete_generation_safely(client, target, collection, "index.unpublished_generation_cleanup_failed")
         raise
     try:
         _publish_alias(client, collection, target, previous_target)
@@ -170,9 +177,62 @@ def index_corpus(
                 }
             },
         )
-    except Exception:
-        client.delete_collection(target)
-        raise
+    except Exception as publication_error:
+        try:
+            active_target = _alias_target(client, collection)
+        except Exception:
+            logger.exception(
+                "index.alias_reconciliation_failed",
+                extra={
+                    "fields": {
+                        "alias": collection,
+                        "previous_collection": previous_target,
+                        "candidate_collection": target,
+                    }
+                },
+            )
+            raise RuntimeError(
+                "Alias publication outcome could not be reconciled; both generations were retained"
+            ) from publication_error
+        if active_target == target:
+            logger.warning(
+                "index.alias_switch_confirmed_after_error",
+                extra={
+                    "fields": {
+                        "alias": collection,
+                        "previous_collection": previous_target,
+                        "active_collection": target,
+                    }
+                },
+            )
+        elif active_target == previous_target:
+            logger.warning(
+                "index.alias_switch_not_committed",
+                extra={
+                    "fields": {
+                        "alias": collection,
+                        "previous_collection": previous_target,
+                        "candidate_collection": target,
+                    }
+                },
+            )
+            _delete_generation_safely(client, target, collection, "index.unpublished_generation_cleanup_failed")
+            raise
+        else:
+            logger.error(
+                "index.alias_reconciliation_unexpected_target",
+                extra={
+                    "fields": {
+                        "alias": collection,
+                        "previous_collection": previous_target,
+                        "candidate_collection": target,
+                        "observed_collection": active_target,
+                    }
+                },
+            )
+            raise RuntimeError(
+                "Alias points to an unexpected collection after publication failed; both generations were retained"
+            ) from publication_error
     if previous_target is not None and previous_target != target and client.collection_exists(previous_target):
         try:
             client.delete_collection(previous_target)
