@@ -1,0 +1,51 @@
+# Development and verification
+
+From the repository root with Python 3.11+ and uv 0.11.3:
+
+```bash
+uv sync --locked --extra dev
+uv run --locked ruff check src scripts tests
+uv run --locked ruff format --check src scripts tests
+uv run --locked mypy
+uv run --locked pytest -q -m unit tests/unit
+```
+
+| Suite | Dependencies | Purpose |
+| --- | --- | --- |
+| `tests/unit/` | Explicit stubs/mocks; no downloads or live Qdrant | RRF, metrics, factory/service, HTTP, logging, token policy, index identity. |
+| `tests/integration/` | Live Qdrant and real encoders | Indexing, vectors, strategies, candidate invariants and token limits. |
+
+Within each suite, test modules follow the corresponding production package: for example, API tests live under `api/`, encoder tests under `encoders/`, and retrieval strategy tests under `services/search/strategy/`. Integration tests use the same service path beneath `tests/integration/`. The package-level `logger.py` test remains at `tests/unit/test_logger.py`.
+
+Run integration separately after installing development dependencies:
+
+```bash
+docker compose up -d qdrant
+QDRANT_URL=http://127.0.0.1:6333 pytest -q -m integration tests/integration
+```
+
+Tests create isolated collections and clean up. Host execution uses the host model cache, not Compose's named volume, and may download models again. Avoid concurrent evaluation workloads.
+
+Ruff checks source, scripts and tests. Strict mypy covers source and scripts; dynamic test doubles are outside that scope. Embedded report HTML has a line-length exemption.
+
+[The workflow](../.github/workflows/quality.yml) uses the same `uv.lock` and pinned uv release for lint, format, types and unit tests on push/PR with Python 3.11. It does not run heavy integration or evaluation. Verify remote CI after pushing; local results are not a GitHub Actions result.
+
+The [previous verification record](index-validation-comparison.md) documents 51 unit and six integration tests. Counts describe that execution. The historical local-copy clean install and the pending clone-based release check are documented in [clean-install validation](clean-install-validation.md).
+
+## Coverage
+
+Install the development dependencies and run:
+
+```bash
+pytest -q -m unit tests/unit --cov \
+  --cov-report=term-missing --cov-report=xml:coverage.xml \
+  --cov-report=json:coverage.json --cov-report=html:htmlcov
+```
+
+Open `htmlcov/index.html` to inspect missed statements and branches. Coverage configuration in `pyproject.toml` includes the entire Python package and scripts, including unimported modules. Tests are outside those source roots. Generated coverage files are ignored by Git. No minimum threshold is enforced yet.
+
+The workflow puts coverage in its run summary and saves XML, JSON and HTML as the `unit-test-coverage` artifact. The Codecov upload uses GitHub OIDC authentication with the `unit` flag, so no upload secret is stored in this repository. Upload failures fail that step instead of silently publishing a stale result. See the [official Codecov action documentation](https://github.com/codecov/codecov-action#using-oidc). Repository activation in Codecov may still be needed for the external dashboard.
+
+The README links the main-branch CI badge and the unit-only Codecov badge for `patrickadeelino/retrieval-lab`. A badge requires a successful remote run/upload before it can show a result. Line coverage, branch coverage and the combined percentage are different measurements; coverage does not establish assertion quality or retrieval quality.
+
+The distribution and GitHub project are named `retrieval-lab`; the existing Python import package remains `hybrid_retrieval_lab`, so documented CLI commands stay compatible.
