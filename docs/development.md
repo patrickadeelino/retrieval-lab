@@ -44,8 +44,8 @@ pytest -q -m unit tests/unit --cov \
 
 Open `htmlcov/index.html` to inspect missed statements and branches. Coverage configuration in `pyproject.toml` includes the entire Python package and scripts, including unimported modules. Tests are outside those source roots. Generated coverage files are ignored by Git. No minimum threshold is enforced yet.
 
-The workflow puts coverage in its run summary and saves XML, JSON and HTML as the `unit-test-coverage` artifact. The Codecov upload uses GitHub OIDC authentication with the `unit` flag, so no upload secret is stored in this repository. Upload failures fail that step instead of silently publishing a stale result. See the [official Codecov action documentation](https://github.com/codecov/codecov-action#using-oidc). Repository activation in Codecov may still be needed for the external dashboard.
+The workflow puts coverage in its run summary and saves XML, JSON and HTML as the `unit-test-coverage` artifact. Download that artifact from the GitHub Actions run to inspect the HTML report. No external coverage service is required.
 
-The README links the main-branch CI badge and the unit-only Codecov badge for `patrickadeelino/retrieval-lab`. A badge requires a successful remote run/upload before it can show a result. Line coverage, branch coverage and the combined percentage are different measurements; coverage does not establish assertion quality or retrieval quality.
+The README links the main-branch CI badge and a static unit-coverage badge. After changing tests or production code, rerun the command above, read the total percentage from its terminal summary, and update the badge value in `README.md` before pushing. The badge is intentionally manual, so it never depends on an external service and may be stale if it is not refreshed. Coverage does not establish assertion quality or retrieval quality.
 
 The distribution and GitHub project are named `retrieval-lab`; the existing Python import package remains `hybrid_retrieval_lab`, so documented CLI commands stay compatible.

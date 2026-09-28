@@ -61,13 +61,3 @@ jobs:
             htmlcov/
           if-no-files-found: error
           retention-days: 14
-
-      - name: Upload unit coverage to Codecov
-        uses: codecov/codecov-action@v7
-        with:
-          use_oidc: true
-          files: coverage.xml
-          flags: unit
-          name: unit-tests
-          disable_search: true
-          fail_ci_if_error: true

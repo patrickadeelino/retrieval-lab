@@ -3,7 +3,7 @@
 A Python retrieval API and an inspectable experiment comparing **BM25, dense retrieval, RRF fusion, and ColBERT reranking** over a frozen Portuguese GitHub documentation corpus. It returns ranked chunks without generating answers.
 
 [![CI](https://github.com/patrickadeelino/retrieval-lab/actions/workflows/quality.yml/badge.svg?branch=main)](https://github.com/patrickadeelino/retrieval-lab/actions/workflows/quality.yml)
-[![Unit test coverage](https://codecov.io/gh/patrickadeelino/retrieval-lab/branch/main/graph/badge.svg?flag=unit)](https://app.codecov.io/gh/patrickadeelino/retrieval-lab)
+[![Unit test coverage](https://img.shields.io/badge/unit%20coverage-79.45%25-brightgreen)](docs/development.md#coverage)
 
 [![Documentation](docs/assets/documentation.svg)](docs/README.md)
 [![Test guide](docs/assets/tests.svg)](docs/development.md)
@@ -104,7 +104,7 @@ Open [the review screen](http://127.0.0.1:8765) to inspect every chunk and edit 
 
 ## Development and status
 
-Unit tests use explicit doubles without Qdrant or downloads. Integration tests use real Qdrant and encoders in isolated collections. Ruff checks lint/format; mypy runs strictly over source and scripts. GitHub Actions is configured for **unit tests and static checks only**. The CI badge tracks the main-branch workflow. The Codecov badge reports unit-test coverage only, including branches; integration coverage is measured separately. Coverage spans the Python package and scripts. See [coverage setup and reports](docs/development.md#coverage).
+Unit tests use explicit doubles without Qdrant or downloads. Integration tests use real Qdrant and encoders in isolated collections. Ruff checks lint/format; mypy runs strictly over source and scripts. GitHub Actions is configured for **unit tests and static checks only**. The CI badge tracks the main-branch workflow. The coverage badge shows the latest unit-test coverage (including branches) and is updated manually after running the coverage command documented in [coverage setup and reports](docs/development.md#coverage). Integration coverage is measured separately; coverage spans the Python package and scripts.
 
 See the [development guide](docs/development.md) and [documentation index](docs/README.md). The project is published as [patrickadeelino/retrieval-lab](https://github.com/patrickadeelino/retrieval-lab).
 
