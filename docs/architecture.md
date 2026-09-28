@@ -1,6 +1,6 @@
 # Architecture and API
 
-HTTP and offline evaluation share `SearchService`. It validates inputs, resolves a strategy through the factory, executes it and applies the response limit. HTTP validation, serialization and status mapping remain in `api/`.
+HTTP and offline evaluation share `SearchService`. It validates query and limit values, resolves the requested strategy through `SearchStrategyFactory`, executes it and applies the response limit. Each strategy implements the `SearchStrategy` protocol; the factory maps the request name to its implementation. HTTP request validation, serialization and status mapping remain in `api/`.
 
 ```text
 src/hybrid_retrieval_lab/
