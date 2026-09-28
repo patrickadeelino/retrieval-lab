@@ -72,7 +72,7 @@ def create_search_service(
 ) -> SearchService:
     resources = SearchResources(
         client or QdrantClient(url=os.getenv("QDRANT_URL", "http://localhost:6333")),
-        collection if collection is not None else os.environ.get("QDRANT_COLLECTION", "github_docs_pilot_active"),
+        collection if collection is not None else os.environ.get("QDRANT_COLLECTION", "github_docs_pilot"),
         corpus_path or Path(os.getenv("CORPUS_PATH", "data/corpus/chunks.jsonl")),
     )
     return SearchService(SearchStrategyFactory(resources))

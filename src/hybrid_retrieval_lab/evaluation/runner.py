@@ -253,7 +253,7 @@ def evaluate(
         raise ValueError("Every query must have at least one relevant chunk")
 
     client = QdrantClient(url=os.getenv("QDRANT_URL", "http://localhost:6333"))
-    collection = os.getenv("QDRANT_COLLECTION", "github_docs_pilot_active")
+    collection = os.getenv("QDRANT_COLLECTION", "github_docs_pilot")
     manifest = verify_index(client, collection, corpus_path, chunks)
     count = len(manifest.indexed_ids)
     service = create_search_service(client=client, collection=collection, corpus_path=corpus_path)

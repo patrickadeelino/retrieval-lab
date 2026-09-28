@@ -14,8 +14,7 @@ services:
         GIT_TREE_STATE: ${GIT_TREE_STATE:-unknown}
     environment:
       QDRANT_URL: http://qdrant:6333
-      QDRANT_COLLECTION: github_docs_pilot_active
-      QDRANT_LEGACY_COLLECTION: github_docs_pilot
+      QDRANT_COLLECTION: github_docs_pilot
       FASTEMBED_CACHE_PATH: /models
       GIT_COMMIT: ${GIT_COMMIT:-unknown}
       GIT_TREE_STATE: ${GIT_TREE_STATE:-unknown}

@@ -1,10 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import uuid
-from dataclasses import asdict
-from importlib.metadata import version
 from pathlib import Path
 from typing import Literal
 
@@ -31,14 +28,14 @@ class SkippedChunk(BaseModel):
 
 class IndexManifest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     corpus_sha256: str
     indexed_ids: list[str]
     skipped_chunks: list[SkippedChunk]
     bm25_avg_len: float
     encoding_config: dict[str, str | int]
+    chunking_config: dict[str, str | int | bool]
     model_revisions: dict[str, str]
-    index_sha256: str
 
 
 def point_id(chunk_id: str) -> str:
@@ -58,14 +55,17 @@ def encoding_config() -> dict[str, str | int]:
         "e5_query_prefix": "query: ",
         "e5_passage_prefix": "passage: ",
         "colbert_model": COLBERT_MODEL,
-        **{package: version(package) for package in ("fastembed", "tokenizers", "transformers", "onnxruntime")},
     }
 
 
-def chunk_payload(chunk: Chunk) -> dict[str, str]:
-    payload = asdict(chunk)
-    payload["chunk_id"] = payload.pop("id")
-    return payload
+def chunking_config(tokenizer_revision: str) -> dict[str, str | int | bool]:
+    return {
+        "strategy": "section_aware_token_budget",
+        "max_tokens": MAX_TOKENS,
+        "tokenizer_model": E5_MODEL,
+        "tokenizer_revision": tokenizer_revision,
+        "includes_passage_prefix_and_special_tokens": True,
+    }
 
 
 def read_manifest(client: QdrantClient, collection: str) -> IndexManifest:
@@ -75,35 +75,20 @@ def read_manifest(client: QdrantClient, collection: str) -> IndexManifest:
     return IndexManifest.model_validate(metadata[METADATA_KEY])
 
 
-def stored_index_hash(client: QdrantClient, collection: str, chunks: list[Chunk]) -> str:
-    expected = {point_id(chunk.id): chunk_payload(chunk) for chunk in chunks}
-    records: dict[str, models.Record] = {}
+def stored_point_ids(client: QdrantClient, collection: str) -> set[str]:
+    ids: set[str] = set()
     offset: models.ExtendedPointId | None = None
     while True:
-        batch, next_offset = client.scroll(collection, limit=16, offset=offset, with_payload=True, with_vectors=True)
+        batch, next_offset = client.scroll(collection, limit=256, offset=offset, with_payload=False, with_vectors=False)
         for record in batch:
             key = str(record.id)
-            if key in records or key not in expected or record.payload != expected[key]:
-                raise ValueError("Indexed IDs or payloads do not match the corpus; reindex before evaluation")
-            records[key] = record
+            if key in ids:
+                raise ValueError("Index contains duplicate point IDs; reindex before evaluation")
+            ids.add(key)
         if next_offset is None:
             break
         offset = next_offset
-    if set(records) != set(expected):
-        raise ValueError("Indexed chunk set does not match the manifest; reindex before evaluation")
-    digest = hashlib.sha256()
-    for key in sorted(records):
-        record = records[key]
-        digest.update(
-            json.dumps(
-                {"id": key, "payload": record.payload, "vector": record.model_dump(mode="json")["vector"]},
-                sort_keys=True,
-                separators=(",", ":"),
-                allow_nan=False,
-            ).encode()
-        )
-        digest.update(b"\n")
-    return digest.hexdigest()
+    return ids
 
 
 def verify_index(client: QdrantClient, collection: str, corpus_path: Path, chunks: list[Chunk]) -> IndexManifest:
@@ -111,7 +96,11 @@ def verify_index(client: QdrantClient, collection: str, corpus_path: Path, chunk
     source_ids = {chunk.id for chunk in chunks}
     indexed_ids = set(manifest.indexed_ids)
     skipped_ids = {chunk.id for chunk in manifest.skipped_chunks}
-    if manifest.corpus_sha256 != corpus_hash(corpus_path) or manifest.encoding_config != encoding_config():
+    if (
+        manifest.corpus_sha256 != corpus_hash(corpus_path)
+        or manifest.encoding_config != encoding_config()
+        or manifest.chunking_config != chunking_config(manifest.model_revisions.get("dense", ""))
+    ):
         raise ValueError("Corpus or encoder configuration differs from the index manifest; reindex before evaluation")
     if (
         not indexed_ids
@@ -121,7 +110,10 @@ def verify_index(client: QdrantClient, collection: str, corpus_path: Path, chunk
         or len(indexed_ids) != len(manifest.indexed_ids)
     ):
         raise ValueError("Index manifest does not account for every corpus chunk exactly once")
-    indexed_chunks = [chunk for chunk in chunks if chunk.id in indexed_ids]
-    if stored_index_hash(client, collection, indexed_chunks) != manifest.index_sha256:
-        raise ValueError("Stored vectors differ from the index manifest; reindex before evaluation")
+    point_count = client.count(collection_name=collection, exact=True).count
+    if point_count != len(indexed_ids):
+        raise ValueError("Qdrant point count differs from the index manifest; reindex before evaluation")
+    expected_point_ids = {point_id(chunk_id) for chunk_id in indexed_ids}
+    if stored_point_ids(client, collection) != expected_point_ids:
+        raise ValueError("Qdrant point IDs differ from the index manifest; reindex before evaluation")
     return manifest

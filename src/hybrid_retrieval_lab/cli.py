@@ -23,10 +23,7 @@ def main() -> None:
     parser.add_argument(
         "command",
         choices=["index", "evaluate"],
-        help=(
-            "index builds and validates a versioned collection before atomically switching the active alias; "
-            "evaluate reads the existing index"
-        ),
+        help=("index rebuilds the fixed Qdrant collection; evaluate reads the existing index"),
     )
     parser.add_argument("--corpus", type=Path, default=Path("data/corpus/chunks.jsonl"))
     parser.add_argument("--queries", type=Path, default=Path("data/queries/pilot-queries.jsonl"))
@@ -56,9 +53,8 @@ def main() -> None:
                 if attempt == 29:
                     raise
                 time.sleep(1)
-        collection = os.getenv("QDRANT_COLLECTION", "github_docs_pilot_active")
-        legacy_collection = os.getenv("QDRANT_LEGACY_COLLECTION", "github_docs_pilot")
-        count = index_corpus(client, collection, args.corpus, legacy_collection=legacy_collection)
+        collection = os.getenv("QDRANT_COLLECTION", "github_docs_pilot")
+        count = index_corpus(client, collection, args.corpus)
         print(f"Indexed {count} chunks")
         manifest = read_manifest(client, collection)
         skipped_ids = ", ".join(chunk.id for chunk in manifest.skipped_chunks) or "none"

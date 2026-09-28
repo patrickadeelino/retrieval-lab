@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import cast
 
 import pytest
-from qdrant_client import QdrantClient, models
+from qdrant_client import QdrantClient
 
 from hybrid_retrieval_lab.encoders.bm25 import VECTOR_NAME as BM25_VECTOR
 from hybrid_retrieval_lab.encoders.colbert import VECTOR_NAME as COLBERT_VECTOR
@@ -15,47 +15,8 @@ from hybrid_retrieval_lab.encoders.e5 import DIMENSIONS, MAX_TOKENS, E5Encoder
 from hybrid_retrieval_lab.encoders.e5 import VECTOR_NAME as E5_VECTOR
 from hybrid_retrieval_lab.ingestion.chunker import Page, chunk_pages
 from hybrid_retrieval_lab.ingestion.identity import point_id, verify_index
-from hybrid_retrieval_lab.ingestion.indexer import _publish_alias, index_corpus
+from hybrid_retrieval_lab.ingestion.indexer import index_corpus
 from hybrid_retrieval_lab.ingestion.loader import load_chunks
-
-
-def test_qdrant_alias_switches_generations_in_one_operation() -> None:
-    client = QdrantClient(url=os.getenv("QDRANT_URL", "http://localhost:6333"), timeout=30)
-    suffix = uuid.uuid4().hex
-    alias = f"test_alias_{suffix}"
-    old_collection = f"test_old_{suffix}"
-    new_collection = f"test_new_{suffix}"
-    try:
-        client.create_collection(
-            old_collection, vectors_config={"dense": models.VectorParams(size=2, distance=models.Distance.COSINE)}
-        )
-        client.create_collection(
-            new_collection, vectors_config={"dense": models.VectorParams(size=2, distance=models.Distance.COSINE)}
-        )
-        _publish_alias(client, alias, old_collection, previous=None)
-        assert (
-            next(item for item in client.get_aliases().aliases if item.alias_name == alias).collection_name
-            == old_collection
-        )
-
-        _publish_alias(client, alias, new_collection, previous=old_collection)
-
-        assert (
-            next(item for item in client.get_aliases().aliases if item.alias_name == alias).collection_name
-            == new_collection
-        )
-    finally:
-        aliases = [item for item in client.get_aliases().aliases if item.alias_name == alias]
-        if aliases:
-            client.update_collection_aliases(
-                change_aliases_operations=[
-                    models.DeleteAliasOperation(delete_alias=models.DeleteAlias(alias_name=alias))
-                ]
-            )
-        for collection_name in (old_collection, new_collection):
-            if client.collection_exists(collection_name):
-                client.delete_collection(collection_name)
-        client.close()
 
 
 def test_all_corpus_points_have_deterministic_ids_payload_and_three_vectors(
@@ -127,19 +88,41 @@ def test_mixed_corpus_skips_only_oversized_chunk(indexed_collection: tuple[Qdran
         assert manifest.indexed_ids == ["valid"]
         assert [chunk.id for chunk in manifest.skipped_chunks] == ["too-long"]
     finally:
-        aliases = [item for item in client.get_aliases().aliases if item.alias_name == collection]
-        physical_collections = {item.collection_name for item in aliases}
-        if aliases:
-            client.update_collection_aliases(
-                change_aliases_operations=[
-                    models.DeleteAliasOperation(delete_alias=models.DeleteAlias(alias_name=collection))
-                ]
-            )
-        elif client.collection_exists(collection):
-            physical_collections.add(collection)
-        for physical_collection in physical_collections:
-            if client.collection_exists(physical_collection):
-                client.delete_collection(physical_collection)
+        if client.collection_exists(collection):
+            client.delete_collection(collection)
+
+
+def test_reindex_replaces_points_and_manifest_in_fixed_collection(
+    tmp_path: Path,
+) -> None:
+    client = QdrantClient(url=os.getenv("QDRANT_URL", "http://localhost:6333"), timeout=120)
+    collection = f"test_hrl_reindex_{uuid.uuid4().hex}"
+    source = {
+        "id": "first-chunk",
+        "text": "A first small source chunk.",
+        "title": "Title",
+        "section": "Section",
+        "source_id": "source",
+        "source_url": "https://example.com",
+    }
+    path = tmp_path / "reindex.jsonl"
+    path.write_text(json.dumps(source) + "\n", encoding="utf-8")
+
+    try:
+        assert index_corpus(client, collection, path) == 1
+        replacement = source | {"id": "replacement-chunk", "text": "A replacement source chunk."}
+        path.write_text(json.dumps(replacement) + "\n", encoding="utf-8")
+
+        assert index_corpus(client, collection, path) == 1
+
+        manifest = verify_index(client, collection, path, load_chunks(path))
+        points, _ = client.scroll(collection_name=collection, with_payload=False, with_vectors=False)
+        assert manifest.indexed_ids == ["replacement-chunk"]
+        assert {str(point.id) for point in points} == {point_id("replacement-chunk")}
+    finally:
+        if client.collection_exists(collection):
+            client.delete_collection(collection)
+        client.close()
 
 
 def test_pilot_corpus_fits_e5_budget() -> None:
