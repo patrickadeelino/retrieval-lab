@@ -5,6 +5,7 @@ __pycache__/
 .ruff_cache/
 logs/
 .idea/
+/handoffs/
 *.egg-info/
 .mypy_cache/
 build/
