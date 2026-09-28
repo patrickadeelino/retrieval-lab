@@ -7,7 +7,7 @@ BM25, dense embeddings, RRF fusion and ColBERT reranking, compared through one P
 [![Unit test coverage](https://img.shields.io/badge/unit%20coverage-79.45%25-brightgreen)](docs/development.md#coverage)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](pyproject.toml)
 
-This is the implementation companion to the [Fundamentos de Information Retrieval blog series](https://www.patrickadelino.com.br/series/information-retrieval/) (Portuguese). The articles explain the concepts; this repository brings them together and measures their behavior on a judged corpus. See the [article-to-code map](#companion-to-the-blog-series).
+This is the implementation companion to the [Fundamentals of Information Retrieval blog series](https://www.patrickadelino.com.br/en/series/information-retrieval/). The articles explain the concepts; this repository brings them together and measures their behavior on a judged Portuguese corpus. See the [article-to-code map](#companion-to-the-blog-series).
 
 [Results](#results) · [How it works](#how-it-works) · [Quickstart](#quickstart) · [Method and limitations](#method-and-limitations) · [Documentation](docs/README.md)
 
@@ -112,14 +112,14 @@ The [HTML report](reports/baseline/index.html) contains per-query rankings, cand
 
 The series builds from retrieval fundamentals to hybrid search. These articles connect those concepts to their implementation in this repository.
 
-| Article (PT) | Where it appears in this repository |
+| Article (EN-US) | Where it appears in this repository |
 | --- | --- |
-| [O que é Information Retrieval?](https://www.patrickadelino.com.br/series/information-retrieval/o-que-sao-information-retrieval/introducao/) | Overall flow: query → candidates → ranking |
-| [Busca Baseada em Termos: TF-IDF, índice invertido e BM25](https://www.patrickadelino.com.br/series/information-retrieval/term-based-retrieval/introducao/) | [`encoders/bm25.py`](src/hybrid_retrieval_lab/encoders/bm25.py), [`strategy/bm25.py`](src/hybrid_retrieval_lab/services/search/strategy/bm25.py) |
-| [Busca Semântica: embeddings, vetores e similaridade de cosseno](https://www.patrickadelino.com.br/series/information-retrieval/embeddings-busca-semantica/introducao/) | [`encoders/e5.py`](src/hybrid_retrieval_lab/encoders/e5.py), [`strategy/dense.py`](src/hybrid_retrieval_lab/services/search/strategy/dense.py) |
-| [Chunking: Tamanho fixo, estrutural e semântico](https://www.patrickadelino.com.br/series/information-retrieval/chunking/introducao/) | [`ingestion/chunker.py`](src/hybrid_retrieval_lab/ingestion/chunker.py) (section-aware chunking bounded by the E5 512-token budget) |
-| [Vector Databases: armazenamento, indexação e busca vetorial com Qdrant](https://www.patrickadelino.com.br/series/information-retrieval/vector-databases/por-que-usar-um-vector-database/) | [`ingestion/indexer.py`](src/hybrid_retrieval_lab/ingestion/indexer.py), [`ingestion/identity.py`](src/hybrid_retrieval_lab/ingestion/identity.py) |
-| [Hybrid Search: BM25 e embeddings, RRF e reranking](https://www.patrickadelino.com.br/series/information-retrieval/hybrid-search-reranking/quando-a-pergunta-pede-mais-de-um-sinal/) | [`strategy/hybrid.py`](src/hybrid_retrieval_lab/services/search/strategy/hybrid.py), [`strategy/colbert.py`](src/hybrid_retrieval_lab/services/search/strategy/colbert.py) |
+| [What Is Information Retrieval?](https://www.patrickadelino.com.br/en/series/information-retrieval/o-que-sao-information-retrieval/introduction/) | Overall flow: query → candidates → ranking |
+| [Term-Based Retrieval: TF-IDF, Inverted Indexes, and BM25](https://www.patrickadelino.com.br/en/series/information-retrieval/term-based-retrieval/introduction/) | [`encoders/bm25.py`](src/hybrid_retrieval_lab/encoders/bm25.py), [`strategy/bm25.py`](src/hybrid_retrieval_lab/services/search/strategy/bm25.py) |
+| [Semantic Search: Embeddings, Vectors, and Cosine Similarity](https://www.patrickadelino.com.br/en/series/information-retrieval/embeddings-busca-semantica/introduction/) | [`encoders/e5.py`](src/hybrid_retrieval_lab/encoders/e5.py), [`strategy/dense.py`](src/hybrid_retrieval_lab/services/search/strategy/dense.py) |
+| [Chunking: Fixed-Size, Structural, and Semantic Strategies](https://www.patrickadelino.com.br/en/series/information-retrieval/chunking/introduction/) | [`ingestion/chunker.py`](src/hybrid_retrieval_lab/ingestion/chunker.py) (section-aware chunking bounded by the E5 512-token budget) |
+| [Vector Databases: Storage, Indexing, and Vector Search with Qdrant](https://www.patrickadelino.com.br/en/series/information-retrieval/vector-databases/why-use-a-vector-database/) | [`ingestion/indexer.py`](src/hybrid_retrieval_lab/ingestion/indexer.py), [`ingestion/identity.py`](src/hybrid_retrieval_lab/ingestion/identity.py) |
+| [Hybrid Search: BM25 and Embeddings, RRF, and Reranking](https://www.patrickadelino.com.br/en/series/information-retrieval/hybrid-search-reranking/when-a-question-needs-more-than-one-signal/) | [`strategy/hybrid.py`](src/hybrid_retrieval_lab/services/search/strategy/hybrid.py), [`strategy/colbert.py`](src/hybrid_retrieval_lab/services/search/strategy/colbert.py) |
 
 More writing at [patrickadelino.com.br](https://www.patrickadelino.com.br/).
 
