@@ -15,12 +15,12 @@ The reviewed pilot contains **53 chunks, 10 queries, and 530 relevance judgments
 
 | Strategy | Mean nDCG@5 | Mean Recall@10 | Typical latency |
 | --- | ---: | ---: | ---: |
-| BM25 | 0.777 | 91.0% | 2.21 ms |
-| Dense E5 | 0.713 | 84.7% | 14.18 ms |
-| Hybrid RRF | 0.797 | 94.3% | 13.95 ms |
-| Hybrid + ColBERT | 0.868 | 94.3% | 154.46 ms |
+| BM25 | 0.777 | 91.0% | 1.96 ms |
+| Dense E5 | 0.713 | 84.7% | 15.45 ms |
+| Hybrid RRF | 0.797 | 94.3% | 15.94 ms |
+| Hybrid + ColBERT | 0.868 | 94.3% | 171.93 ms |
 
-ColBERT improved average ordering at the top with about **11.1×** the typical latency of hybrid retrieval. It reranks the same ten candidates, so Recall@10 is unchanged by construction. These are descriptive results from the last validated pilot, not a general benchmark or production SLA. The report files were removed while preparing one final, clean-clone baseline; the new report will be reviewed before it is added here.
+ColBERT improved average ordering at the top with about **10.8×** the typical latency of hybrid retrieval. It reranks the same ten candidates, so Recall@10 is unchanged by construction. The clean-clone run at commit `5e9dc69` reproduced all 40 query/strategy rankings and the quality metrics from the previous validated report; absolute latency varied. These are descriptive results from this pilot, not a general benchmark or production SLA. See the [HTML report](reports/baseline/index.html) and its [source JSON](reports/baseline/pilot.json).
 
 Typical latency is the median of per-query medians, with three timed runs after warmup. It includes query encoding and Qdrant, but excludes HTTP. [Method and limitations](docs/evaluation.md) · [Reproduction and recovery procedure](docs/reproduction-and-recovery.md) · [Report publication status](reports/README.md).
 
@@ -84,9 +84,9 @@ Stop with `docker compose down`; named volumes retain the index and models. JSON
 
 ## Reproduce the report
 
-The single public report is planned at `reports/baseline/`. It is intentionally empty until the reviewed clean-clone run is approved. No model evaluation was run while preparing the procedure.
+The canonical clean-clone baseline is available as the [HTML report](reports/baseline/index.html) and [machine-readable JSON](reports/baseline/pilot.json). The report records rankings, quality metrics, latency samples, input hashes, model snapshots and runtime provenance.
 
-After report generation, view it locally with:
+To inspect the report locally, serve the saved HTML without rerunning evaluation:
 
 ```bash
 python -m http.server 8770 --bind 127.0.0.1 --directory reports/baseline

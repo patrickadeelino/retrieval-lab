@@ -1,8 +1,8 @@
 # Published evaluation report
 
-Only the approved baseline report belongs in this directory:
+The canonical baseline is the clean-clone evaluation from commit `5e9dc69`:
 
 - `baseline/index.html` — browser-friendly report
-- `baseline/pilot.json` — machine-readable results and provenance
+- `baseline/pilot.json` — rankings, metrics, timings and reproduction provenance
 
-Historical and intermediate reports are intentionally excluded. The baseline will be regenerated from a clean clone with the documented locked dependencies, validated Qdrant index, and reviewed relevance judgments. It is not present until that run is approved and completed.
+The run reproduced all 40 query/strategy rankings and quality metrics from the previous validated report. Absolute latency varied and is reported from this run. See [the reproduction procedure](../docs/reproduction-and-recovery.md) and [the evaluation method](../docs/evaluation.md). Historical and intermediate reports are not included in the current tree.

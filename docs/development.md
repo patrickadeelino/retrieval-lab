@@ -30,7 +30,7 @@ Ruff checks source, scripts and tests. Strict mypy covers source and scripts; dy
 
 [The workflow](../.github/workflows/quality.yml) uses the same `uv.lock` and pinned uv release for lint, format, types and unit tests on push/PR with Python 3.11. It does not run heavy integration or evaluation. Verify remote CI after pushing; local results are not a GitHub Actions result.
 
-The [previous verification record](index-validation-comparison.md) documents 51 unit and six integration tests. Counts describe that execution. The historical local-copy clean install and the pending clone-based release check are documented in [clean-install validation](clean-install-validation.md).
+The [index validation and token-budget guide](index-validation-and-token-budget.md) records a previous run with 51 unit and six integration tests; those counts describe that execution. Follow the [reproduction and recovery guide](reproduction-and-recovery.md) for the current clean-clone baseline procedure and index recovery steps.
 
 ## Coverage
 

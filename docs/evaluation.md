@@ -1,6 +1,6 @@
 # Evaluation guide
 
-The pilot compares four strategies over 53 frozen Portuguese GitHub documentation chunks and ten information needs. All 530 query/chunk pairs have grades. The author reviewed them, including a second-opinion audit; this is a local reference, not independent multi-annotator ground truth.
+The pilot compares four strategies over 53 frozen Portuguese GitHub documentation chunks and ten information needs. All 530 query/chunk pairs have grades assigned by the author. This is a local reference, not independent multi-annotator ground truth.
 
 ## Relevance rubric
 
@@ -25,9 +25,17 @@ Judge the available chunk text, not unseen linked content. Reasons and borderlin
 
 ## Last validated result and trade-off
 
-The last validated run showed mean nDCG@5 increasing from 0.797 (hybrid) to 0.868 (ColBERT), with typical latency increasing from 13.95 ms to 154.46 ms, about 11.1×. Recall@10 stays at 94.3% because both return the same ten IDs. Equal Recall@10 means equal coverage at that cutoff, not equal ordering or equal Recall@5. The old report bundles were removed; the final clean-clone report is pending approval and will be the only HTML/JSON pair under `reports/baseline/`.
+The clean-clone run at commit `5e9dc69` showed mean nDCG@5 increasing from 0.797 (hybrid) to 0.868 (ColBERT), with typical latency increasing from 15.94 ms to 171.93 ms, about 10.8×. Recall@10 stays at 94.3% because both return the same ten IDs. Equal Recall@10 means equal coverage at that cutoff, not equal ordering or equal Recall@5. All 40 query/strategy rankings and quality metrics matched the previous validated report; absolute latency varied between runs. The canonical artifacts are [HTML](../reports/baseline/index.html) and [JSON](../reports/baseline/pilot.json).
 
-This is an ordering-versus-latency trade-off for this pilot, not universal superiority, production throughput or financial cost. Ten queries and no independent held-out benchmark limit generalization. The original [conclusions](experiment-conclusions.md) remain in Portuguese. Earlier runs used different timing summaries or candidate counts; compare like-for-like settings.
+This is an ordering-versus-latency trade-off observed in this pilot, not evidence of universal superiority, production throughput or financial cost. The ten hand-authored queries and author-assigned judgments limit generalization. Treat the results as descriptive and compare only runs with matching corpus, candidate limits and timing methodology. The root [README](../README.md) summarizes the latest clean-clone run; see the canonical [HTML report](../reports/baseline/index.html) and [JSON data](../reports/baseline/pilot.json).
+
+## Judgment provenance
+
+The project author wrote the ten queries after reviewing the frozen corpus and assigned all 530 query/chunk grades using the rubric above. The queries are purpose-built for these documents; they are not a sample of production user traffic or a held-out benchmark.
+
+The author also received second-opinion reviews from GLM 5.3 and Claude Code. These reviews were advisory: they did not provide independent ground-truth labels, and the author retained responsibility for the final qrels. The repository does not preserve the full review prompts or the exact model version behind Claude Code, so those reviews are not reproducible annotations.
+
+The tracked qrels history contains an initial snapshot, not a row-by-row audit trail. An external review reported a possible post-result change for `q06` / `rest-pagination-004`; the available Git history cannot verify its previous grade or timing. See the [qrels change log](../data/qrels/CHANGELOG.md). Treat that chronology as unknown, and interpret pilot metrics as results against author-assigned judgments rather than independent consensus.
 
 ## Reproduction and provenance
 

@@ -22,4 +22,4 @@ The tokenizer API is documented in [Hugging Face AutoTokenizer](https://huggingf
 
 51 unit tests passed. The six integration tests passed against real Qdrant and encoders, including a mixed valid/oversized corpus, preservation of an existing collection when every chunk is oversized, manifest verification, and rejection of an oversized query. Ruff lint/format and strict mypy passed over 37 source/script files.
 
-The pilot rerun and comparison are recorded in `index-validation-comparison.md`. Historical report files were removed; the one public report will be generated after the clean-clone procedure is approved.
+The clean-clone pilot rerun and comparison are recorded in the [evaluation guide](evaluation.md), with the canonical artifacts in [`reports/baseline/`](../reports/baseline/).

@@ -1,13 +1,13 @@
-# Julgamentos de relevância revisados
+# Reviewed relevance judgments
 
-`pilot-proposed.jsonl` conserva o nome histórico, mas contém os julgamentos revisados pelo autor para as dez consultas atuais `q01`–`q10`: 530 pares, 53 chunks por pergunta. Cada par recebe nota explícita `0`, `1` ou `2`; ausência de linha seria um julgamento faltante, não uma nota zero. As linhas positivas incluem `reason`. O corpus está em `data/corpus/chunks.jsonl` e as necessidades em `data/queries/pilot-queries.jsonl`.
+`pilot-proposed.jsonl` retains its historical filename but contains the author's reviewed judgments for the ten current queries, `q01`–`q10`: 530 query/chunk pairs, with 53 chunks per query. Each pair has an explicit grade of `0`, `1`, or `2`; a missing row would be a missing judgment, not a zero. Positive rows include a `reason`. The corpus is in [`../corpus/chunks.jsonl`](../corpus/chunks.jsonl), and the information needs are in [`../queries/pilot-queries.jsonl`](../queries/pilot-queries.jsonl).
 
-## Rubrica
+## Rubric
 
-- `2`: o chunk responde diretamente à pergunta ou explica suficientemente uma causa plausível dentro do contexto de uma pergunta aberta. O texto do chunk deve sustentar a explicação por si só.
-- `1`: o chunk oferece uma verificação, uma etapa ou parte útil da solução, mas não resolve a pergunta principal sozinho.
-- `0`: o chunk não acrescenta explicação ou ação útil para aquela necessidade; sobreposição de termos ou tema não basta.
+- `2`: The chunk directly answers the question or sufficiently explains a plausible cause in the context of an open-ended question. The chunk text must support the explanation on its own.
+- `1`: The chunk provides a useful check, step, or part of a solution, but does not resolve the main question by itself.
+- `0`: The chunk adds no useful explanation or action for the information need; topical or lexical overlap alone is not enough.
 
-A pergunta apresentada ao usuário define o foco. O campo `information_need` esclarece esse foco, sem adicionar uma segunda pergunta obrigatória. Em `q04`, a resposta principal é se o GitHub reenvia automaticamente; instruções de reentrega são contexto complementar. Em `q06`, uma explicação completa de um motivo plausível para uma listagem incompleta pode receber 2. Em `q10`, distinguir paginação de permissão exige informações dos dois lados.
+The user's question defines the focus. `information_need` clarifies that focus rather than adding a second required question. For `q04`, the main answer is whether GitHub retries automatically; redelivery instructions are supporting context. For `q06`, a complete explanation of one plausible reason for an incomplete listing can receive grade 2. For `q10`, distinguishing pagination from permissions requires information about both.
 
-`Recall@k` considera notas 1 e 2 relevantes; `nDCG@k` usa os graus. Veja `docs/query-id-migration.md` para relacionar IDs históricos aos atuais e `docs/ten-query-revision-comparison.md` para a revisão após duas auditorias independentes.
+`Recall@k` treats grades 1 and 2 as relevant; `nDCG@k` uses the graded labels. The current query IDs map to [`pilot-queries.jsonl`](../queries/pilot-queries.jsonl). These are author-assigned local judgments, not consensus among independent annotators. See the [judgment change log](CHANGELOG.md) and the [evaluation provenance notes](../../docs/evaluation.md#judgment-provenance).

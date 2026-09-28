@@ -10,7 +10,7 @@ Its FastEmbed ONNX artifact is approximately 2.2 GB. A local compatibility worka
 
 - Sparse encoder: [Qdrant/bm25](https://huggingface.co/Qdrant/bm25), configured for Portuguese.
 - Dense encoder: [intfloat/multilingual-e5-small](https://huggingface.co/intfloat/multilingual-e5-small).
-- Corpus: Portuguese [GitHub documentation](https://docs.github.com/pt). Each chunk retains source URL, title, section and source ID. See [the frozen corpus](../data/corpus/chunks.jsonl) and [preparation notes](corpus-plan.md).
+- Corpus: Portuguese [GitHub documentation](https://docs.github.com/pt). Each chunk retains source URL, title, section and source ID. See [the frozen corpus](../data/corpus/chunks.jsonl) and [corpus snapshot notes](../data/corpus/README.md).
 
 Follow upstream licenses and notices. The corpus is third-party documentation, not original project prose. See [GitHub Docs licensing information](https://github.com/github/docs/blob/main/LICENSE).
 
